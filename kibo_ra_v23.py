@@ -368,9 +368,24 @@ KRI_DEFINITIONS = {
             "the requirement specifies encryption confidentiality integrity or identity verification",
             "the requirement defends against a specific attack vector such as injection cross-site scripting or credential stuffing",
             "the requirement specifies secure communication such as tls encryption in transit or certificate validation",
-            "the requirement limits or logs access attempts to detect or prevent unauthorized use",
-            "as a security engineer I want secrets and api keys managed centrally so that credentials are never hardcoded or exposed",
-            "given an unauthenticated request, when it attempts to reach a protected resource, then the system should reject it and log the attempt"
+            "the requirement limits or logs access attempts to detect or prevent unauthorized use"
+            # Two user-story/BDD-format prototypes ("as a security
+            # engineer...", "given an unauthenticated request...") were
+            # tried here for phrasing-style diversity (matching what was
+            # added to the other 4 KRIs) and reverted: a real pipeline run
+            # showed they shifted this KRI's semantic score DOWN on all 21
+            # holdout items (100% negative, not noise), flipping 3 items
+            # from pass to fail, while the same style of addition helped
+            # or was neutral for every other KRI. Read as evidence that
+            # security's existing prototype pool is a tighter, more
+            # cohesive cluster (auth/access-control/encryption) than the
+            # others, and these two narrower, differently-scoped additions
+            # (secrets management; request rejection) pulled the pool's
+            # centroid away from what most security-relevant text in this
+            # style of corpus actually matches, rather than adding
+            # coverage. Kept out rather than replaced blind; a
+            # differently-scoped BDD-style prototype could still be worth
+            # trying, but only with a real run to check it first.
         ]
     },
     "compliance": {
