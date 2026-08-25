@@ -230,7 +230,12 @@ KRI_DEFINITIONS = {
             "validation", "validate", "verify", "verification", "accuracy",
             "consistent", "consistency", "correct*", "incorrect", "mismatch",
             "import", "export", "upload", "download", "select", "selection",
-            "store", "update", "delete", "transform", "calculate"
+            "store", "update", "delete", "transform", "calculate",
+            # COBIT APO14 Manage Data treats processing and state-changing
+            # operations on a record as core data-management activities,
+            # not just the literal input/output/store/update vocabulary
+            # already above.
+            "process*", "activat*"
         ] + _COMPLEXITY_DOMAIN_CUES,
         # WORKING HYPOTHESIS, weaker provenance than other KRIs in this
         # file: the architectural-domain cues above were added because
@@ -430,6 +435,17 @@ def normalize(text: str) -> str:
     return text
 
 
+# Stem continuations that are a different word/meaning than the wildcard
+# cue intends, keyed by the cue itself -- e.g. "secur*" is meant to catch
+# secure/secured/security, not "securities" (financial instruments, a
+# false-friend homonym via the shared "secur" root, distinct from and
+# unrelated to information security). Kept as an explicit denylist rather
+# than a stricter general stemming rule so no other cue's matching changes.
+_STEM_FALSE_FRIENDS = {
+    "secur*": {"securities", "security's"},
+}
+
+
 def phrase_present(text: str, phrase: str) -> bool:
     # Multiword phrases use direct substring matching; single words use
     # boundaries. A trailing '*' opts a cue into stem/prefix matching
@@ -438,7 +454,11 @@ def phrase_present(text: str, phrase: str) -> bool:
     phrase = phrase.lower()
     if phrase.endswith("*"):
         stem = re.escape(phrase[:-1])
-        return bool(re.search(rf"\b{stem}\w*", text))
+        excluded = _STEM_FALSE_FRIENDS.get(phrase, set())
+        for m in re.finditer(rf"\b{stem}\w*", text):
+            if m.group(0) not in excluded:
+                return True
+        return False
     if " " in phrase or "-" in phrase:
         return phrase in text
     return bool(re.search(rf"\b{re.escape(phrase)}\b", text))
@@ -641,10 +661,16 @@ class KIBORA:
             concurrent_user_context = co_occurs_with(
                 text, "user*", ["multiple", "concurrent", "simultaneous", "many"]
             )
+            # Baseline term, same status as complexity's/io_accuracy's: ISO
+            # 25010 performance efficiency has three sub-characteristics
+            # (time behavior, resource utilization, capacity), and every
+            # implemented capability consumes some resource/time budget
+            # whether or not the requirement states a number for it.
             structural = (
-                0.55 * (1.0 if has_quantified_performance_target(text) else 0.0) +
+                0.20 * (1.0 if has_normative_obligation(text) else 0.0) +
+                0.45 * (1.0 if has_quantified_performance_target(text) else 0.0) +
                 0.20 * (1.0 if concurrent_user_context else 0.0) +
-                0.25 * features["length_ratio"]
+                0.15 * features["length_ratio"]
             )
 
         elif kri == "complexity":
@@ -675,7 +701,16 @@ class KIBORA:
             # vague-term hits is defensible, scaled down from compliance's
             # since this claim is about NL text in general rather than a
             # specific governance obligation.
-            generic_verb_hits, _ = count_generic_scope_verb_hits(text)
+            # A quantified performance target ("process X within N seconds")
+            # is itself an acceptance criterion, so it directly answers the
+            # "by what criteria is this judged done" question the generic-
+            # scope-verb heuristic is a proxy for -- suppress that heuristic
+            # rather than flag "process" as underspecified in a sentence
+            # that already specifies both the object and the measure.
+            generic_verb_hits, _ = (
+                (0, []) if has_quantified_performance_target(text)
+                else count_generic_scope_verb_hits(text)
+            )
             structural = (
                 0.15 * (1.0 if has_normative_obligation(text) else 0.0) +
                 0.20 * saturated(features["vague_terms"], 1.5) +
@@ -697,12 +732,12 @@ class KIBORA:
             # smaller weight than compliance's obligation floor since the
             # link is more indirect.
             structural = (
-                0.30 * (1.0 if has_normative_obligation(text) else 0.0) +
-                0.30 * saturated(
+                0.50 * (1.0 if has_normative_obligation(text) else 0.0) +
+                0.20 * saturated(
                     features["alternatives"] + features["conditions"], 2.0
                 ) +
-                0.15 * saturated(features["vague_terms"], 1.5) +
-                0.25 * saturated(hit_count, 2.0)
+                0.10 * saturated(features["vague_terms"], 1.5) +
+                0.20 * saturated(hit_count, 2.0)
             )
 
         elif kri == "security":
@@ -787,8 +822,10 @@ class KIBORA:
         # corroboration. complexity/ambiguity keep the original 65/35
         # hit-count-led blend.
         structural_weight = 0.70 if kri in ("compliance",) else (
-            0.55 if kri in ("user_error", "io_accuracy", "complexity") else (
-                0.50 if kri in ("performance", "security") else 0.35
+            0.68 if kri in ("performance",) else (
+                0.55 if kri in ("user_error", "io_accuracy", "complexity") else (
+                    0.50 if kri in ("security",) else 0.35
+                )
             )
         )
         hit_weight = 1.0 - structural_weight
