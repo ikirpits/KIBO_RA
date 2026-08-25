@@ -1,0 +1,21 @@
+The product shall ensure that only supervisors can advertise empty time slots.The product must ensure that supervisors are allowed to access advertise empty time slots.
+Each team owner will need to use a username and password in order to be authenticated to reach the team owner’s page
+The product shall ensure that it can only be accessed by authorized users. The product will be able to distinguish between authorized and unauthorized users in all access attempts
+Administrator shall be able to activate a pre-paid card via the Administration section in under 5 seconds.
+The product shall process messages within 2 seconds.The product shall have a maximum message processing time of 2 seconds
+The product shall provide Multi-threading and Load Balancing.The product shall provide multi-threading technology as well as load balancing to overcome data load spikes and traffic.
+Every registered user will have access to the product’s support site via the Internet. 70% of registered users shall find a solution to their problem within 5 minutes of using the support site.
+The verbiage used within the system shall be consistent with Standard English and the terminology of the national Nursing Community.
+The system shall be intuitive and self explanatory.
+The lead washing process will operate within the established physical web service structure.
+The application shall run on a web application server.
+The system shall able to operate within a business office environment typical of the Nursing Department at DePaul University.
+Each page shall contain a navigation menu which shows the index into which the current page is contained.
+The product must comply with the intranet page standards and requirements of ENET Securities. 95% of the product look & feel will be approved by the Architecture group prior to implementation. The remaining 5% will be corrected and approved within one month of product release.
+The product shall have a consistent color scheme and fonts.
+The product shall be available during normal business hours. As long as the user has access to the client PC the system will be available 99% of the time during the first six months of operation.
+The product shall be available 99% of the time. Rationale: To avoid service interruption during busiest customer service response periods. The product shall be available 99.99% of the time for regular business days.
+The system shall have high availability every day of the year.The system must be available for use between 12:00AM and 6:00PM all days of the year.
+The product shall be able to support multiple remote users
+The website shall be capable of supporting 100 000 customers.
+The streaming server will support a maximum of 700 movies; new servers can be added to support more movies.

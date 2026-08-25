@@ -1,0 +1,63 @@
+{
+  "version": "2.1",
+  "description": "KIBO-RA v2 policy and mathematical configuration. Evidence extraction (lexical + semantic scoring) never uses expert labels. The 'calibration' section below is a separate, optional, disclosed post-hoc rescale, identity until fit_calibration() is run explicitly against a named calibration set.",
+  "risk_thresholds": {
+    "low": 0.4,
+    "medium": 0.7
+  },
+  "gate_thresholds": {
+    "compliance": 0.5,
+    "ambiguity": 0.6,
+    "confidence": 0.65
+  },
+  "semantic": {
+    "enabled": true,
+    "model": "all-mpnet-base-v2",
+    "semantic_weight": 0.5,
+    "lexical_weight": 0.5
+  },
+  "scoring": {
+    "evidence_saturation": 2.5,
+    "semantic_temperature": 0.2,
+    "length_normalization_tokens": 20
+  },
+  "confidence": {
+    "semantic_weight": 0.5,
+    "evidence_weight": 0.3,
+    "agreement_weight": 0.2
+  },
+  "calibration": {
+    "fitted_on": null,
+    "fitted_at": null,
+    "coefficients": {
+      "performance": {
+        "a": 1.0,
+        "b": 0.0
+      },
+      "security": {
+        "a": 1.0,
+        "b": 0.0
+      },
+      "io_accuracy": {
+        "a": 1.0,
+        "b": 0.0
+      },
+      "user_error": {
+        "a": 1.0,
+        "b": 0.0
+      },
+      "compliance": {
+        "a": 1.0,
+        "b": 0.0
+      },
+      "complexity": {
+        "a": 1.0,
+        "b": 0.0
+      },
+      "ambiguity": {
+        "a": 1.0,
+        "b": 0.0
+      }
+    }
+  }
+}
