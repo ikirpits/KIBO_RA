@@ -485,7 +485,24 @@ KRI_DEFINITIONS = {
             "multiple teams", "organizational",
             "technical debt", "refactor*", "legacy code",
             "backward compatib*", "breaking change", "version migration",
-            "schema migration", "api versioning", "deprecat*"
+            "schema migration", "api versioning", "deprecat*",
+            # Round: nested/hierarchical UI navigation structure -- a
+            # recognized information-architecture complexity source
+            # (multi-level menus, site maps) distinct from the generic
+            # multi-step/multi-component vocabulary above and not reached
+            # by the shared architectural COMPLEXITY_DOMAINS list.
+            "navigation menu", "site map", "sitemap", "breadcrumb*",
+            "nested menu", "multi-level menu", "multi-level navigation",
+            "information architecture", "hierarch*",
+            # Round: horizontal-scaling-by-addition, phrased the way SRS
+            # documents describe it operationally (Bass, Clements & Kazman's
+            # "increase resources" scalability tactic) rather than with the
+            # architecture-pattern terminology already covered by the
+            # distributed_scale domain (scale, scalab*, elastic*).
+            "scale out", "scaling out", "additional servers",
+            "add more servers", "adding more servers", "additional nodes",
+            "add more nodes", "adding more nodes", "servers can be added",
+            "nodes can be added", "more servers can be", "more nodes can be"
         ] + _COMPLEXITY_DOMAIN_CUES,
         "prototypes": [
             "the requirement requires coordinating multiple distinct system components or subsystems with non-trivial interdependencies, beyond a single straightforward user action",
@@ -519,7 +536,13 @@ KRI_DEFINITIONS = {
             "the requirement requires coordinating concurrent access to shared state, such as locking, transactions, or avoiding race conditions",
             "the requirement must support multiple locales, languages, currencies, or timezones",
             "the requirement involves a machine learning model or ai component, such as training, inference, or a recommendation engine",
-            "the requirement requires deploying or provisioning infrastructure through an automated pipeline spanning multiple environments"
+            "the requirement requires deploying or provisioning infrastructure through an automated pipeline spanning multiple environments",
+            # Round: two further declarative-style additions, targeting
+            # concepts identified as missing coverage rather than rewordings
+            # of existing prototypes -- nested/hierarchical UI structure,
+            # and horizontal scaling by adding server or node instances.
+            "the requirement involves a multi-level or hierarchical navigation structure, such as a nested menu or site map, that the user must traverse",
+            "the requirement's capacity is met by adding more server or node instances rather than by a fixed, single-instance design"
         ]
     },
     "ambiguity": {
