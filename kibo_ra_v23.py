@@ -610,7 +610,20 @@ KRI_DEFINITIONS = {
             # which is all architecture-pattern or business-process
             # focused, not physical/organizational-context focused.
             "operating environment", "business environment", "office environment",
-            "physical environment", "deployment environment", "organizational context"
+            "physical environment", "deployment environment", "organizational context",
+            # Round: required runtime/hosting platform -- IEEE 830's Design
+            # and Implementation Constraints category names "required
+            # technologies" and hardware/platform limitations as their own
+            # constraint type, same family as the operating-environment
+            # cues just above but for the technical platform rather than
+            # the physical/organizational setting.
+            "application server", "web server", "hosting platform",
+            "runtime environment", "deployment platform",
+            # Round: internet-facing/external access, phrased without the
+            # word "remote" -- the same underlying complexity source as
+            # the remote-access cues above (network reachability, crossing
+            # a trust boundary), just named by naming the network instead.
+            "via the internet", "over the internet", "internet access"
         ] + _COMPLEXITY_DOMAIN_CUES,
         "prototypes": [
             "the requirement requires coordinating multiple distinct system components or subsystems with non-trivial interdependencies, beyond a single straightforward user action",
