@@ -438,9 +438,18 @@ KRI_DEFINITIONS = {
             "the requirement restricts access to protect personal or sensitive information",
             "the requirement must conform to a named regulatory framework or industry standard such as gdpr hipaa sox or pci-dss",
             "the requirement involves reporting certification or attestation to an external regulator or auditor",
-            "the requirement governs how long data is retained or when it must be deleted under a retention policy",
-            "the requirement follows an internal policy document or standard operating procedure that an internal or external audit will check",
-            "given a data subject request, when the deadline set by law or contract is reached, then the system must have completed the required action or reported a violation"
+            "the requirement governs how long data is retained or when it must be deleted under a retention policy"
+            # Two more prototypes (internal policy/SOP audit; Given/When/
+            # Then data-subject-deadline) were added and then reverted here
+            # for the same reason as security's: this KRI's round-2 pass-
+            # rate gain (61.9% -> 66.7%) turned out to be entangled with
+            # security's now-reverted prototypes changing the shared
+            # one-vs-rest "rest" contrast pool, not verifiably this KRI's
+            # own content -- see the note on the "one KRI per round"
+            # testing discipline this file follows from here on. Reverted
+            # to the last state that was validated in isolation (round 1)
+            # rather than keep an unverified pair. Re-add and test alone,
+            # with everything else held constant, if revisited.
         ]
     },
     "complexity": {
@@ -486,9 +495,14 @@ KRI_DEFINITIONS = {
             "the requirement requires aggregating or analyzing data from multiple sources",
             "the requirement involves a state machine or workflow engine coordinating multiple steps or approval stages",
             "the requirement has cross-cutting concerns that interact with several unrelated parts of the system",
-            "the requirement requires resolving conflicts or priorities among competing business rules",
-            "the requirement requires a non-trivial algorithm or computational approach whose correctness is hard to verify by inspection",
-            "the requirement must preserve backward compatibility or coordinate a breaking change across multiple teams or consumers"
+            "the requirement requires resolving conflicts or priorities among competing business rules"
+            # Two more prototypes (algorithmic complexity; backward-
+            # compatibility/breaking-change coordination) reverted here,
+            # same reason and same "one KRI per round" discipline as
+            # compliance's note above -- this KRI's round-2 pass rate
+            # didn't move either way, so there's no positive signal being
+            # given up, but keeping an unverified prototype pair around
+            # for no measured benefit isn't warranted either.
         ]
     },
     "ambiguity": {
@@ -572,9 +586,13 @@ KRI_DEFINITIONS = {
             "the requirement names a management or oversight action without stating its scope or acceptance criteria",
             "the requirement uses a placeholder such as tbd or to be determined instead of a concrete value",
             "the requirement describes a quality goal like robust efficient or user friendly without a measurable definition",
-            "the requirement's acceptance criteria depend on subjective judgment such as reasonable, acceptable, or as appropriate",
-            "the requirement gives a non-exhaustive example list using such as or including but not limited to, leaving the full scope unstated",
-            "the requirement leaves an outcome to someone's discretion or says it is subject to change without defining the conditions"
+            "the requirement's acceptance criteria depend on subjective judgment such as reasonable, acceptable, or as appropriate"
+            # Two more prototypes (non-exhaustive example lists; unstated
+            # discretion/subject-to-change) reverted here, same reason as
+            # compliance's and complexity's notes above: this KRI's round-2
+            # gain (66.7% -> 76.2%) fully reverted to its round-1 value the
+            # moment security's now-removed prototypes left the shared
+            # rest-pool, so it was never verifiably this KRI's own content.
         ]
     }
 }
