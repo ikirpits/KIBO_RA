@@ -321,9 +321,27 @@ KRI_DEFINITIONS = {
             "the system must remain responsive under load",
             "the requirement specifies resource utilization such as cpu memory or bandwidth consumption",
             "the requirement specifies a capacity limit such as concurrent users transactions or peak load the system must sustain",
-            "the requirement describes how quickly the system starts up loads or renders content",
-            "as a user I want the page or action to complete quickly so that I do not have to wait",
-            "given normal load, when the system is stress tested, then it should meet its service level agreement without degrading"
+            "the requirement describes how quickly the system starts up loads or renders content"
+            # Two user-story/BDD-format prototypes were tried here as this
+            # round's isolated single-KRI test (everything else held at the
+            # round-1 baseline) and reverted: they shifted this KRI's own
+            # score down on 18/21 items (mean -0.028), a clear, decisive
+            # negative effect now that the round-2 batching confound is
+            # gone. This is the second of two isolated tests of this
+            # phrasing-style idea (security's was the first, also
+            # negative) -- worth treating as a working hypothesis that
+            # BDD/user-story-format prototypes don't mix well with a
+            # corpus that's uniformly declarative IEEE-830-style "shall"
+            # text, rather than assuming it'll go the same way for every
+            # KRI without testing each one.
+            # This test also produced the first clean measurement of the
+            # cross-KRI ripple size: security/compliance/complexity/
+            # ambiguity shifted by only +-0.001 to +-0.005 in response to
+            # this KRI's prototype change, 5-10x smaller than the -0.028
+            # direct effect on this KRI's own score. Ripple is real (as
+            # the security-removal episode showed) but small relative to
+            # a KRI's own prototype change -- useful context for how much
+            # to worry about it in future single-KRI rounds.
         ]
     },
     "security": {
