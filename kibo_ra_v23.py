@@ -1006,10 +1006,19 @@ class KIBORA:
             # and, alone, isn't evidence of security-driven architectural
             # complexity the way the domain's other cues (crypto, key
             # management, threat modeling, MFA/SSO/federation) are -- see
-            # distinct_complexity_domains()'s docstring. compliance's own
-            # use of this function (below) is untouched by this exclusion.
+            # distinct_complexity_domains()'s docstring. Same logic for a
+            # bare "release": it matches any ordinary "product release"
+            # ship-date mention, not evidence of a CI/CD release pipeline
+            # (still fully credited via deploy*/pipeline/ci/cd/continuous
+            # delivery/etc., all still plain hits in the same domain).
+            # compliance's own use of this function (below) is untouched
+            # by either exclusion.
             distinct_domains = distinct_complexity_domains(
-                text, exclude_solo={"security": {"authenticat*", "authoriz*"}}
+                text,
+                exclude_solo={
+                    "security": {"authenticat*", "authoriz*"},
+                    "deployment": {"release"},
+                }
             )
             structural = (
                 0.25 * (1.0 if has_normative_obligation(text) else 0.0) +
