@@ -300,7 +300,20 @@ KRI_DEFINITIONS = {
             "transactions per second", "requests per second",
             "queries per second", "tps", "qps", "rps", "peak load",
             "burst*", "horizontal scal*", "vertical scal*", "elastic*",
-            "simultaneous", "parallel*", "batch processing", "async*"
+            "simultaneous", "parallel*", "batch processing", "async*",
+            # Round 2: SLA/testing/degradation vocabulary a performance
+            # requirement uses that round 1's ISO 25010 sub-characteristic
+            # sweep didn't reach -- these are how performance requirements
+            # get stated and verified in practice, not just how the
+            # underlying quality attribute is defined.
+            "sla", "service level agreement", "slo", "service level objective",
+            "five nines", "uptime guarantee", "load test*", "stress test*",
+            "benchmark*", "performance profil*", "bottleneck",
+            "cache", "caching", "cache hit rate", "cache miss",
+            "query optimization", "indexing", "n+1 quer*",
+            "packet loss", "jitter", "round trip time",
+            "graceful degradation", "performance degradation", "slowdown",
+            "page load", "time to first byte", "ttfb"
         ],
         "prototypes": [
             "the requirement specifies response time or system performance",
@@ -308,7 +321,9 @@ KRI_DEFINITIONS = {
             "the system must remain responsive under load",
             "the requirement specifies resource utilization such as cpu memory or bandwidth consumption",
             "the requirement specifies a capacity limit such as concurrent users transactions or peak load the system must sustain",
-            "the requirement describes how quickly the system starts up loads or renders content"
+            "the requirement describes how quickly the system starts up loads or renders content",
+            "as a user I want the page or action to complete quickly so that I do not have to wait",
+            "given normal load, when the system is stress tested, then it should meet its service level agreement without degrading"
         ]
     },
     "security": {
@@ -334,7 +349,18 @@ KRI_DEFINITIONS = {
             "single sign-on", "sso", "oauth", "saml", "jwt",
             "rate limit*", "brute force", "least privilege", "zero trust",
             "data leak*", "data breach", "audit log",
-            "intrusion detection", "security patch", "cve", "harden*"
+            "intrusion detection", "security patch", "cve", "harden*",
+            # Round 2: secure-coding practice, incident response, and
+            # cloud/API-security vocabulary -- distinct facets of security
+            # exposure from round 1's attack-category and crypto sweep.
+            "input sanitiz*", "input validation", "output encod*",
+            "secure by design", "defense in depth", "principle of least privilege",
+            "incident response", "security incident", "forensics",
+            "kill switch", "api key", "api security", "webhook signature",
+            "secrets management", "vault", "iam",
+            "identity and access management", "csp", "content security policy",
+            "cors", "same-origin policy", "clickjacking", "man-in-the-middle",
+            "replay attack", "session hijacking", "privilege escalation"
         ],
         "prototypes": [
             "the requirement specifies authentication authorization or access control",
@@ -342,7 +368,9 @@ KRI_DEFINITIONS = {
             "the requirement specifies encryption confidentiality integrity or identity verification",
             "the requirement defends against a specific attack vector such as injection cross-site scripting or credential stuffing",
             "the requirement specifies secure communication such as tls encryption in transit or certificate validation",
-            "the requirement limits or logs access attempts to detect or prevent unauthorized use"
+            "the requirement limits or logs access attempts to detect or prevent unauthorized use",
+            "as a security engineer I want secrets and api keys managed centrally so that credentials are never hardcoded or exposed",
+            "given an unauthenticated request, when it attempts to reach a protected resource, then the system should reject it and log the attempt"
         ]
     },
     "compliance": {
@@ -374,7 +402,18 @@ KRI_DEFINITIONS = {
             "governance framework", "data protection officer", "dpo",
             "breach notification", "privacy impact assessment", "dpia",
             "opt-in", "opt-out", "data minimization", "purpose limitation",
-            "third-party audit"
+            "third-party audit",
+            # Round 2: more named frameworks, and contract/audit-execution
+            # vocabulary -- round 1 covered data-protection regulation
+            # heavily but underrepresented broader governance/audit and
+            # legal-contract language.
+            "soc 1", "fedramp", "iso 22301", "nist csf", "coso", "basel",
+            "terms of service", "liability", "indemnif*", "warrant*",
+            "intellectual property", "licens*",
+            "internal audit", "external audit", "audit finding",
+            "corrective action", "non-conformance", "nonconformance",
+            "policy document", "standard operating procedure", "sop",
+            "whistleblow*", "conflict of interest", "code of conduct"
         ],
         "prototypes": [
             "the requirement is subject to legal regulatory contractual or policy obligations",
@@ -384,7 +423,9 @@ KRI_DEFINITIONS = {
             "the requirement restricts access to protect personal or sensitive information",
             "the requirement must conform to a named regulatory framework or industry standard such as gdpr hipaa sox or pci-dss",
             "the requirement involves reporting certification or attestation to an external regulator or auditor",
-            "the requirement governs how long data is retained or when it must be deleted under a retention policy"
+            "the requirement governs how long data is retained or when it must be deleted under a retention policy",
+            "the requirement follows an internal policy document or standard operating procedure that an internal or external audit will check",
+            "given a data subject request, when the deadline set by law or contract is reached, then the system must have completed the required action or reported a violation"
         ]
     },
     "complexity": {
@@ -407,7 +448,19 @@ KRI_DEFINITIONS = {
             "conflict resolution", "priorit*", "sequenc*",
             "interdependen*", "downstream", "upstream", "cascad*",
             "rollback", "compensat*", "saga pattern",
-            "distributed transaction"
+            "distributed transaction",
+            # Round 2: algorithmic, organizational, technical-debt, and
+            # compatibility complexity -- sources of Brooks' accidental
+            # complexity round 1's architectural-pattern sweep didn't
+            # reach (round 1 was about system structure; these are about
+            # the difficulty of the logic itself, the people involved, and
+            # change over time).
+            "algorithm", "computational complexity", "optimization problem",
+            "cross-team", "cross-functional", "stakeholder*",
+            "multiple teams", "organizational",
+            "technical debt", "refactor*", "legacy code",
+            "backward compatib*", "breaking change", "version migration",
+            "schema migration", "api versioning", "deprecat*"
         ] + _COMPLEXITY_DOMAIN_CUES,
         "prototypes": [
             "the requirement requires coordinating multiple distinct system components or subsystems with non-trivial interdependencies, beyond a single straightforward user action",
@@ -418,7 +471,9 @@ KRI_DEFINITIONS = {
             "the requirement requires aggregating or analyzing data from multiple sources",
             "the requirement involves a state machine or workflow engine coordinating multiple steps or approval stages",
             "the requirement has cross-cutting concerns that interact with several unrelated parts of the system",
-            "the requirement requires resolving conflicts or priorities among competing business rules"
+            "the requirement requires resolving conflicts or priorities among competing business rules",
+            "the requirement requires a non-trivial algorithm or computational approach whose correctness is hard to verify by inspection",
+            "the requirement must preserve backward compatibility or coordinate a breaking change across multiple teams or consumers"
         ]
     },
     "ambiguity": {
@@ -455,7 +510,18 @@ KRI_DEFINITIONS = {
             "occasionally", "rarely", "acceptable", "satisfactory",
             "optimal", "efficient", "effective", "robust", "flexible",
             "state of the art", "industry standard", "best practice",
-            "reasonable time", "timely manner", "in a timely fashion"
+            "reasonable time", "timely manner", "in a timely fashion",
+            # Round 2: open-ended-list markers and discretion/contingency
+            # phrases -- Kamsties & Berry's "coordination ambiguity" covers
+            # non-exhaustive lists (the reader can't tell what's excluded),
+            # and unstated discretion ("at the discretion of," "subject to
+            # change") is a scope-and-stability ambiguity distinct from the
+            # vague-qualifier and placeholder patterns already above.
+            "and so on", "among others", "such as", "including but not limited to",
+            "at the discretion of", "subject to change", "subject to availability",
+            "may vary", "where possible", "to the extent possible",
+            "as far as possible", "except as noted", "unless otherwise",
+            "tbc", "to be confirmed"
             # Underspecified-scope verbs: a management/oversight action
             # named without stating what it covers or by what criteria it's
             # judged done (ISO/IEC/IEEE 29148's completeness criterion
@@ -491,7 +557,9 @@ KRI_DEFINITIONS = {
             "the requirement names a management or oversight action without stating its scope or acceptance criteria",
             "the requirement uses a placeholder such as tbd or to be determined instead of a concrete value",
             "the requirement describes a quality goal like robust efficient or user friendly without a measurable definition",
-            "the requirement's acceptance criteria depend on subjective judgment such as reasonable, acceptable, or as appropriate"
+            "the requirement's acceptance criteria depend on subjective judgment such as reasonable, acceptable, or as appropriate",
+            "the requirement gives a non-exhaustive example list using such as or including but not limited to, leaving the full scope unstated",
+            "the requirement leaves an outcome to someone's discretion or says it is subject to change without defining the conditions"
         ]
     }
 }
