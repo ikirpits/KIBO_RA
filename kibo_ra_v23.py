@@ -513,14 +513,19 @@ KRI_DEFINITIONS = {
             "the requirement requires aggregating or analyzing data from multiple sources",
             "the requirement involves a state machine or workflow engine coordinating multiple steps or approval stages",
             "the requirement has cross-cutting concerns that interact with several unrelated parts of the system",
-            "the requirement requires resolving conflicts or priorities among competing business rules"
-            # Two more prototypes (algorithmic complexity; backward-
-            # compatibility/breaking-change coordination) reverted here,
-            # same reason and same "one KRI per round" discipline as
-            # compliance's note above -- this KRI's round-2 pass rate
-            # didn't move either way, so there's no positive signal being
-            # given up, but keeping an unverified prototype pair around
-            # for no measured benefit isn't warranted either.
+            "the requirement requires resolving conflicts or priorities among competing business rules",
+            # This round's isolated single-KRI test (everything else held
+            # at the round-1 baseline). Unlike performance's and
+            # security's reverted round-2 attempts, these two are pure
+            # declarative "the requirement..." style, matching the
+            # existing pool's register exactly -- they were never actually
+            # a test of the BDD/user-story style-mismatch hypothesis (that
+            # was confounded with everything else changing at once in
+            # round 2, where this KRI's pass rate didn't move either
+            # direction). This isolates content-depth effect from
+            # phrasing-style effect, which round 2's batch couldn't.
+            "the requirement requires a non-trivial algorithm or computational approach whose correctness is hard to verify by inspection",
+            "the requirement must preserve backward compatibility or coordinate a breaking change across multiple teams or consumers"
         ]
     },
     "ambiguity": {
