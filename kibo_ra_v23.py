@@ -216,7 +216,12 @@ COMPLEXITY_DOMAINS = {
     # scale (a single-node system can still have transaction/locking
     # complexity; distributed_scale above is about multi-node topology).
     "concurrency_transaction": [
-        "transaction*", "concurren* access", "lock*", "deadlock",
+        # Fix: the previous "concurren* access" entry had its '*' in the
+        # middle of the string, which phrase_present() only special-cases
+        # at the end of a cue -- it was being matched as a literal
+        # (never-occurring) substring containing an asterisk character,
+        # i.e. a dead cue that could never fire. Split into two real cues.
+        "transaction*", "concurrent access", "concurren*", "lock*", "deadlock",
         "atomic*", "acid", "race condition", "optimistic lock*",
         "pessimistic lock*"
     ],
@@ -502,7 +507,21 @@ KRI_DEFINITIONS = {
             "scale out", "scaling out", "additional servers",
             "add more servers", "adding more servers", "additional nodes",
             "add more nodes", "adding more nodes", "servers can be added",
-            "nodes can be added", "more servers can be", "more nodes can be"
+            "nodes can be added", "more servers can be", "more nodes can be",
+            # Round: concurrency vocabulary not reached by the
+            # concurrency_transaction domain's transaction/locking-focused
+            # terms (that domain assumes shared-state coordination
+            # language; multi-threading is the underlying mechanism, named
+            # directly, without necessarily using those words).
+            "multi-thread*", "multithread*",
+            # Round: remote/distributed user access -- a recognized
+            # source of complexity distinct from mere concurrency (network
+            # latency, connectivity handling, crossing a security/trust
+            # boundary), kept KRI-specific rather than added to the shared
+            # COMPLEXITY_DOMAINS list to avoid the cross-KRI risk seen
+            # earlier when "remote" was tried (and reverted) as a security
+            # cue on this same holdout.
+            "remote user*", "remote access", "remote client*"
         ] + _COMPLEXITY_DOMAIN_CUES,
         "prototypes": [
             "the requirement requires coordinating multiple distinct system components or subsystems with non-trivial interdependencies, beyond a single straightforward user action",
@@ -542,7 +561,12 @@ KRI_DEFINITIONS = {
             # of existing prototypes -- nested/hierarchical UI structure,
             # and horizontal scaling by adding server or node instances.
             "the requirement involves a multi-level or hierarchical navigation structure, such as a nested menu or site map, that the user must traverse",
-            "the requirement's capacity is met by adding more server or node instances rather than by a fixed, single-instance design"
+            "the requirement's capacity is met by adding more server or node instances rather than by a fixed, single-instance design",
+            # Round: remote/distributed user access as its own complexity
+            # source, distinct from the concurrency prototype above -- the
+            # underlying concern is network reachability and trust-boundary
+            # crossing, not shared-state coordination.
+            "the requirement must support users connecting remotely or from outside the local network, not just users on a local or trusted network"
         ]
     },
     "ambiguity": {
