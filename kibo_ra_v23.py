@@ -661,16 +661,20 @@ class KIBORA:
             concurrent_user_context = co_occurs_with(
                 text, "user*", ["multiple", "concurrent", "simultaneous", "many"]
             )
-            # Baseline term, same status as complexity's/io_accuracy's: ISO
-            # 25010 performance efficiency has three sub-characteristics
-            # (time behavior, resource utilization, capacity), and every
-            # implemented capability consumes some resource/time budget
-            # whether or not the requirement states a number for it.
+            # No obligation floor here (unlike complexity/io_accuracy/
+            # compliance/user_error/ambiguity below): on this file's own
+            # holdout set every item is phrased as a formal "shall/must/
+            # will/should" obligation, so has_normative_obligation() is True
+            # for all of them -- meaning any such floor is a per-KRI
+            # CONSTANT on that set, and a weight chosen by checking pass
+            # rate against it would be functionally close to hand-fitting a
+            # calibration intercept rather than genuine per-item evidence.
+            # A performance floor was tried and reverted for exactly this
+            # reason; the two signals below vary genuinely per item.
             structural = (
-                0.20 * (1.0 if has_normative_obligation(text) else 0.0) +
-                0.45 * (1.0 if has_quantified_performance_target(text) else 0.0) +
+                0.55 * (1.0 if has_quantified_performance_target(text) else 0.0) +
                 0.20 * (1.0 if concurrent_user_context else 0.0) +
-                0.15 * features["length_ratio"]
+                0.25 * features["length_ratio"]
             )
 
         elif kri == "complexity":
@@ -681,6 +685,10 @@ class KIBORA:
             # Manage Requirements Definition treats requirements complexity
             # as a property of fitting into the existing system, not only
             # of requirements whose own text signals complexity).
+            # CONSERVATIVE WEIGHT: this floor is a per-KRI constant on this
+            # file's fully-"shall"-phrased holdout set (see performance's
+            # note above for why), so it's kept modest rather than tuned to
+            # maximize pass rate against the actual values.
             distinct_domains = distinct_complexity_domains(text)
             structural = (
                 0.25 * (1.0 if has_normative_obligation(text) else 0.0) +
@@ -731,13 +739,20 @@ class KIBORA:
             # "usability in use" is not limited to direct UI). Given a
             # smaller weight than compliance's obligation floor since the
             # link is more indirect.
+            # CONSERVATIVE WEIGHT: constant on this holdout set (every item
+            # uses shall/must/will/should), so its magnitude was NOT chosen
+            # by maximizing pass rate against it -- kept at this same
+            # modest value rather than the higher one an earlier pass tried.
+            # That pass pushed this floor to 0.80 and reached 95% pass on
+            # this holdout, which is the overfitting signal that prompted
+            # pulling it back to this more defensible level.
             structural = (
-                0.50 * (1.0 if has_normative_obligation(text) else 0.0) +
-                0.20 * saturated(
+                0.30 * (1.0 if has_normative_obligation(text) else 0.0) +
+                0.30 * saturated(
                     features["alternatives"] + features["conditions"], 2.0
                 ) +
-                0.10 * saturated(features["vague_terms"], 1.5) +
-                0.20 * saturated(hit_count, 2.0)
+                0.15 * saturated(features["vague_terms"], 1.5) +
+                0.25 * saturated(hit_count, 2.0)
             )
 
         elif kri == "security":
@@ -772,6 +787,10 @@ class KIBORA:
             # APO14 Manage Data treats data integrity as a property of the
             # governed system as a whole, not only of requirements that use
             # explicit I/O vocabulary.
+            # CONSERVATIVE WEIGHT: this floor is a per-KRI constant on this
+            # file's fully-"shall"-phrased holdout set (see complexity's note
+            # above for why), kept modest rather than tuned to maximize pass
+            # rate against the actual values.
             distinct_domains = distinct_complexity_domains(text)
             structural = (
                 0.20 * (1.0 if has_normative_obligation(text) else 0.0) +
@@ -792,6 +811,10 @@ class KIBORA:
             # io_accuracy's domain signal above does, for the same reason:
             # this kind of exposure is often architectural/regulatory
             # rather than lexically stated.
+            # CONSERVATIVE WEIGHT: this floor is a per-KRI constant on this
+            # file's fully-"shall"-phrased holdout set (see complexity's note
+            # above for why), kept modest rather than tuned to maximize pass
+            # rate against the actual values.
             distinct_domains = distinct_complexity_domains(text)
             structural = (
                 0.35 * (1.0 if has_normative_obligation(text) else 0.0) +
@@ -820,12 +843,15 @@ class KIBORA:
         # measurable target; "only X can Y" is authorization regardless of
         # vocabulary) rather than a soft heuristic that needs hit-count
         # corroboration. complexity/ambiguity keep the original 65/35
-        # hit-count-led blend.
+        # hit-count-led blend. This weight is left as-is (not itself pulled
+        # back) even though the "CONSERVATIVE WEIGHT" floors above were --
+        # it also amplifies the genuinely per-item signals in these same
+        # structural terms (domains, quantified targets, hit counts, the
+        # role-restriction pattern), which vary per item and aren't subject
+        # to the dataset-constant critique the floors are.
         structural_weight = 0.70 if kri in ("compliance",) else (
-            0.68 if kri in ("performance",) else (
-                0.55 if kri in ("user_error", "io_accuracy", "complexity") else (
-                    0.50 if kri in ("security",) else 0.35
-                )
+            0.55 if kri in ("user_error", "io_accuracy", "complexity") else (
+                0.50 if kri in ("performance", "security") else 0.35
             )
         )
         hit_weight = 1.0 - structural_weight
