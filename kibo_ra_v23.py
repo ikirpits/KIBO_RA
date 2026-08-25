@@ -321,27 +321,17 @@ KRI_DEFINITIONS = {
             "the system must remain responsive under load",
             "the requirement specifies resource utilization such as cpu memory or bandwidth consumption",
             "the requirement specifies a capacity limit such as concurrent users transactions or peak load the system must sustain",
-            "the requirement describes how quickly the system starts up loads or renders content"
-            # Two user-story/BDD-format prototypes were tried here as this
-            # round's isolated single-KRI test (everything else held at the
-            # round-1 baseline) and reverted: they shifted this KRI's own
-            # score down on 18/21 items (mean -0.028), a clear, decisive
-            # negative effect now that the round-2 batching confound is
-            # gone. This is the second of two isolated tests of this
-            # phrasing-style idea (security's was the first, also
-            # negative) -- worth treating as a working hypothesis that
-            # BDD/user-story-format prototypes don't mix well with a
-            # corpus that's uniformly declarative IEEE-830-style "shall"
-            # text, rather than assuming it'll go the same way for every
-            # KRI without testing each one.
-            # This test also produced the first clean measurement of the
-            # cross-KRI ripple size: security/compliance/complexity/
-            # ambiguity shifted by only +-0.001 to +-0.005 in response to
-            # this KRI's prototype change, 5-10x smaller than the -0.028
-            # direct effect on this KRI's own score. Ripple is real (as
-            # the security-removal episode showed) but small relative to
-            # a KRI's own prototype change -- useful context for how much
-            # to worry about it in future single-KRI rounds.
+            "the requirement describes how quickly the system starts up loads or renders content",
+            # Retried in declarative style (register-matched to the pool
+            # above) after two BDD/user-story-format prototypes were
+            # confirmed harmful here in isolated testing (18/21 items,
+            # mean -0.028) -- that finding indicts the phrasing-style
+            # mismatch specifically, not prototype additions to this KRI
+            # in general, which complexity's clean declarative-style test
+            # showed to be safe.
+            "the requirement specifies a service level agreement or uptime guarantee the system must meet",
+            "the requirement requires load or stress testing to verify the system performs correctly under peak demand",
+            "the requirement addresses performance degradation such as slowdown under load or cache-related delay"
         ]
     },
     "security": {
@@ -386,24 +376,17 @@ KRI_DEFINITIONS = {
             "the requirement specifies encryption confidentiality integrity or identity verification",
             "the requirement defends against a specific attack vector such as injection cross-site scripting or credential stuffing",
             "the requirement specifies secure communication such as tls encryption in transit or certificate validation",
-            "the requirement limits or logs access attempts to detect or prevent unauthorized use"
-            # Two user-story/BDD-format prototypes ("as a security
-            # engineer...", "given an unauthenticated request...") were
-            # tried here for phrasing-style diversity (matching what was
-            # added to the other 4 KRIs) and reverted: a real pipeline run
-            # showed they shifted this KRI's semantic score DOWN on all 21
-            # holdout items (100% negative, not noise), flipping 3 items
-            # from pass to fail, while the same style of addition helped
-            # or was neutral for every other KRI. Read as evidence that
-            # security's existing prototype pool is a tighter, more
-            # cohesive cluster (auth/access-control/encryption) than the
-            # others, and these two narrower, differently-scoped additions
-            # (secrets management; request rejection) pulled the pool's
-            # centroid away from what most security-relevant text in this
-            # style of corpus actually matches, rather than adding
-            # coverage. Kept out rather than replaced blind; a
-            # differently-scoped BDD-style prototype could still be worth
-            # trying, but only with a real run to check it first.
+            "the requirement limits or logs access attempts to detect or prevent unauthorized use",
+            # Retried in declarative style after a BDD/user-story-format
+            # pair was confirmed harmful here (100% of items, 3 pass->fail
+            # flips -- see the file's git history for the full note). This
+            # time kept broad and aligned with the existing pool's core
+            # auth/access-control/encryption cluster rather than narrow
+            # sub-topics, hedging against both risk factors that note
+            # identified (style mismatch AND topic narrowness) rather than
+            # just the one already confirmed.
+            "the requirement manages credentials or secrets so they are never exposed or hardcoded in the system",
+            "the requirement detects, logs, or responds to a security incident or intrusion attempt"
         ]
     },
     "compliance": {
@@ -456,18 +439,18 @@ KRI_DEFINITIONS = {
             "the requirement restricts access to protect personal or sensitive information",
             "the requirement must conform to a named regulatory framework or industry standard such as gdpr hipaa sox or pci-dss",
             "the requirement involves reporting certification or attestation to an external regulator or auditor",
-            "the requirement governs how long data is retained or when it must be deleted under a retention policy"
-            # Two more prototypes (internal policy/SOP audit; Given/When/
-            # Then data-subject-deadline) were added and then reverted here
-            # for the same reason as security's: this KRI's round-2 pass-
-            # rate gain (61.9% -> 66.7%) turned out to be entangled with
-            # security's now-reverted prototypes changing the shared
-            # one-vs-rest "rest" contrast pool, not verifiably this KRI's
-            # own content -- see the note on the "one KRI per round"
-            # testing discipline this file follows from here on. Reverted
-            # to the last state that was validated in isolation (round 1)
-            # rather than keep an unverified pair. Re-add and test alone,
-            # with everything else held constant, if revisited.
+            "the requirement governs how long data is retained or when it must be deleted under a retention policy",
+            # A prior pair here (internal policy/SOP audit; Given/When/Then
+            # data-subject-deadline) was reverted because its apparent gain
+            # was entangled with security's since-fixed prototypes changing
+            # the shared contrast pool, not verifiably its own content --
+            # never actually confirmed harmful in isolation. Retried here
+            # in the now-established safe register (declarative, matching
+            # the existing pool), covering governance-process and contract/
+            # legal ground the KRI's cues already reach lexically but the
+            # prototypes didn't yet.
+            "the requirement must pass an internal or external audit against a documented policy or standard operating procedure",
+            "the requirement is governed by a contract term such as liability, warranty, or licensing obligation"
         ]
     },
     "complexity": {
@@ -525,7 +508,18 @@ KRI_DEFINITIONS = {
             # direction). This isolates content-depth effect from
             # phrasing-style effect, which round 2's batch couldn't.
             "the requirement requires a non-trivial algorithm or computational approach whose correctness is hard to verify by inspection",
-            "the requirement must preserve backward compatibility or coordinate a breaking change across multiple teams or consumers"
+            "the requirement must preserve backward compatibility or coordinate a breaking change across multiple teams or consumers",
+            # Further declarative-style additions, per request: covering
+            # domains already reachable through this KRI's lexical cues
+            # (concurrency_transaction, internationalization, ai_ml domains
+            # added earlier) but not yet represented in the prototype pool
+            # -- these are genuinely distinct complexity sources (Brooks'
+            # accidental complexity again), not rewordings of the ones
+            # above.
+            "the requirement requires coordinating concurrent access to shared state, such as locking, transactions, or avoiding race conditions",
+            "the requirement must support multiple locales, languages, currencies, or timezones",
+            "the requirement involves a machine learning model or ai component, such as training, inference, or a recommendation engine",
+            "the requirement requires deploying or provisioning infrastructure through an automated pipeline spanning multiple environments"
         ]
     },
     "ambiguity": {
