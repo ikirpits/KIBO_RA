@@ -133,39 +133,109 @@ CONFIG = load_config()
 COMPLEXITY_DOMAINS = {
     "security": [
         "encrypt*", "authenticat*", "authoriz*", "credential",
-        "certificate", "key management"
+        "certificate", "key management",
+        # Broadened from the original 6-cue set to cover the cryptographic
+        # and network-security vocabulary a requirement is likely to use
+        # when it touches this domain without repeating the same few words.
+        "cryptograph*", "digital signature", "public key", "private key",
+        "hsm", "key rotation", "cipher", "hashing", "salt", "pki",
+        "tls", "ssl", "vpn", "firewall", "penetration test*",
+        "vulnerabilit*", "threat model*"
     ],
     "distributed_scale": [
         "distributed", "replicat*", "concurrent", "cluster",
         "load balanc*", "fault toleran*", "availab*", "scale", "scalab*",
-        "capacity", "capable*"
+        "capacity", "capable*",
+        "sharding", "shard*", "partition*", "horizontal scal*",
+        "vertical scal*", "elastic*", "microservice*", "high availab*",
+        "failover", "redundan*", "multi-region", "geo-distributed",
+        "consensus", "eventual consistency", "cdn", "throughput"
     ],
     "integration": [
         "integrat*", "third-party", "external system", "interoperab*",
-        "migrat*"
+        "migrat*",
+        "api", "webhook", "middleware", "connector", "adapter",
+        "legacy system", "data exchange", "interface with",
+        "synchroniz*", "etl", "batch import", "external service",
+        "vendor system"
     ],
     "deployment": [
-        "deploy*", "provision*", "pipeline", "automat*", "release"
+        "deploy*", "provision*", "pipeline", "automat*", "release",
+        "ci/cd", "continuous integration", "continuous delivery",
+        "rollback", "blue-green", "canary", "infrastructure as code",
+        "containeriz*", "orchestrat*", "kubernetes", "docker"
     ],
-    "compliance": ["complian*", "comply*", "regulat*", "audit", "governance"],
-    "access_control": ["role*", "permission*", "rbac", "role-based access"],
+    "compliance": [
+        "complian*", "comply*", "regulat*", "audit", "governance",
+        "certif*", "accredit*"
+    ],
+    "access_control": [
+        "role*", "permission*", "rbac", "role-based access",
+        "abac", "attribute-based access", "least privilege",
+        "access polic*", "entitlement", "authorization matrix",
+        "segregation of duties"
+    ],
     "event_driven": [
         "notif*", "real-time", "real time", "asynchron*",
-        "event-driven", "publish-subscribe", "pub-sub", "queue"
+        "event-driven", "publish-subscribe", "pub-sub", "queue",
+        "message broker", "kafka", "event bus", "stream processing",
+        "message queue", "callback", "trigger*"
     ],
-    "data_aggregation": ["aggregat*", "analy*", "dashboard", "report*"],
+    "data_aggregation": [
+        "aggregat*", "analy*", "dashboard", "report*",
+        "business intelligence", "data warehouse", "data pipeline",
+        "metrics", "kpi", "visualiz*", "summariz*"
+    ],
     # Same GDPR Art. 32 reasoning already applied to compliance: handling
     # sensitive/personal data brings its own implementation complexity
     # (masking, audit trails, restricted access), independent of and
     # additional to whatever access-control mechanism is used.
-    "data_sensitivity": ["sensitive data", "personal data", "user data", "pii"],
+    "data_sensitivity": [
+        "sensitive data", "personal data", "user data", "pii",
+        "phi", "financial data", "health record*",
+        "confidential information", "trade secret", "special category data",
+        "biometric data"
+    ],
     # Activity tracking/monitoring infrastructure (audit trails, usage
     # logging, observability tooling) is architecturally non-trivial in its
     # own right, independent of what's being tracked. Same GDPR Art. 30
     # "records of processing activities" concept already used for
     # compliance's track*/monitor* cues, applied here to its complexity
     # implications specifically.
-    "observability": ["track*", "monitor*", "activity log", "audit trail", "usage log"]
+    "observability": [
+        "track*", "monitor*", "activity log", "audit trail", "usage log",
+        "telemetry", "logging", "metrics collection", "alerting",
+        "instrumentation", "distributed tracing", "log aggregation"
+    ],
+    # New domains (not in the original 9): each is a well-documented,
+    # independent source of implementation complexity in its own right,
+    # not a rewording of an existing domain above.
+    # Concurrency control: Bass/Clements/Kazman and classic transaction-
+    # processing literature both treat concurrent/transactional access to
+    # shared state as a distinct complexity source from raw distributed
+    # scale (a single-node system can still have transaction/locking
+    # complexity; distributed_scale above is about multi-node topology).
+    "concurrency_transaction": [
+        "transaction*", "concurren* access", "lock*", "deadlock",
+        "atomic*", "acid", "race condition", "optimistic lock*",
+        "pessimistic lock*"
+    ],
+    # Internationalization/localization is a standard, separately-scoped
+    # complexity source in requirements engineering (ISO 25010 groups it
+    # under adaptability) -- supporting multiple locales multiplies the
+    # paths through formatting, translation, and regional-rule logic.
+    "internationalization": [
+        "internationaliz*", "localiz*", "i18n", "l10n",
+        "multi-language", "multi-currency", "timezone", "locale"
+    ],
+    # ML/AI components (training pipelines, model versioning, inference
+    # infrastructure) are a modern, well-recognized complexity source
+    # distinct from conventional deterministic-logic components.
+    "ai_ml": [
+        "machine learning", "artificial intelligence", "ml model",
+        "neural network", "training data", "inference", "model version*",
+        "recommendation engine", "predictive model"
+    ]
 }
 
 _COMPLEXITY_DOMAIN_CUES = [cue for cues in COMPLEXITY_DOMAINS.values() for cue in cues]
@@ -179,7 +249,21 @@ GENERIC_SCOPE_VERB_CUES = [
     "sort*", "refin*", "support*", "review*", "administer*",
     "oversee*", "coordinat*", "handle*", "customiz*",
     "configur*", "process*", "browse*", "maintain*", "supervis*",
-    "curat*", "optimiz*", "streamlin*"
+    "curat*", "optimiz*", "streamlin*",
+    # Extended beyond the originally-validated 23-verb set (see the
+    # generalization check documented on ambiguity's cues below) with the
+    # same "management/oversight action, no stated scope or criteria"
+    # semantics: each names a change or governance action without saying
+    # what it applies to or by what standard it's judged complete.
+    # Deliberately excludes near-ubiquitous SRS verbs (ensure*, provide*,
+    # enable*) that would fire on nearly every requirement in this style
+    # of corpus regardless of whether scope is actually underspecified,
+    # and excludes "control*"/"govern*" despite fitting the pattern
+    # semantically -- both are common IT nouns in their own right (access
+    # control, version control, governance framework) with no agent-noun
+    # suffix to filter the false positive out, unlike the verbs above.
+    "facilitat*", "improv*", "enhanc*", "standardiz*", "consolidat*",
+    "rationaliz*"
 ]
 
 
@@ -201,12 +285,30 @@ KRI_DEFINITIONS = {
             "fast*", "slow*", "latency", "response time", "response*",
             "throughput", "load*", "performance", "scalab*",
             "scale", "capacity", "availab*", "uptime", "concurrent",
-            "volume", "high traffic", "real time", "real-time"
+            "volume", "high traffic", "real time", "real-time",
+            # ISO/IEC 25010 splits performance efficiency into three
+            # sub-characteristics (time behaviour, resource utilization,
+            # capacity); the original list leaned almost entirely on time
+            # behaviour and capacity vocabulary. Filling out all three so
+            # a resource-utilization-only requirement isn't invisible to
+            # this KRI.
+            "turnaround time", "round-trip time", "processing time",
+            "execution time", "startup time", "load time", "refresh rate",
+            "render*", "timeout", "queue time", "wait time",
+            "cpu usage", "memory usage", "bandwidth", "footprint",
+            "utilization", "resource consumption",
+            "transactions per second", "requests per second",
+            "queries per second", "tps", "qps", "rps", "peak load",
+            "burst*", "horizontal scal*", "vertical scal*", "elastic*",
+            "simultaneous", "parallel*", "batch processing", "async*"
         ],
         "prototypes": [
             "the requirement specifies response time or system performance",
             "the requirement concerns latency throughput capacity or scalability",
-            "the system must remain responsive under load"
+            "the system must remain responsive under load",
+            "the requirement specifies resource utilization such as cpu memory or bandwidth consumption",
+            "the requirement specifies a capacity limit such as concurrent users transactions or peak load the system must sustain",
+            "the requirement describes how quickly the system starts up loads or renders content"
         ]
     },
     "security": {
@@ -217,12 +319,30 @@ KRI_DEFINITIONS = {
             "role*", "privilege", "encrypt*",
             "confidential", "integrity", "privacy", "personal data",
             "sensitive data", "token", "session", "mfa", "2fa",
-            "biometric", "unauthorized", "breach", "protect*"
+            "biometric", "unauthorized", "breach", "protect*",
+            # OWASP Top 10 and NIST both name specific attack categories
+            # and controls the original list didn't cover -- a requirement
+            # can be squarely a security requirement while never using the
+            # word "security" itself (e.g. "the system shall prevent SQL
+            # injection" or "all traffic shall use TLS").
+            "injection", "sql injection", "cross-site scripting", "xss",
+            "csrf", "cross-site request forgery", "vulnerabilit*",
+            "exploit*", "penetration test*", "pentest", "threat model*",
+            "attack surface", "malware", "phishing", "ransomware",
+            "firewall", "vpn", "tls", "ssl", "https",
+            "digital signature", "public key infrastructure", "pki",
+            "single sign-on", "sso", "oauth", "saml", "jwt",
+            "rate limit*", "brute force", "least privilege", "zero trust",
+            "data leak*", "data breach", "audit log",
+            "intrusion detection", "security patch", "cve", "harden*"
         ],
         "prototypes": [
             "the requirement specifies authentication authorization or access control",
             "the requirement protects sensitive or personal information",
-            "the requirement specifies encryption confidentiality integrity or identity verification"
+            "the requirement specifies encryption confidentiality integrity or identity verification",
+            "the requirement defends against a specific attack vector such as injection cross-site scripting or credential stuffing",
+            "the requirement specifies secure communication such as tls encryption in transit or certificate validation",
+            "the requirement limits or logs access attempts to detect or prevent unauthorized use"
         ]
     },
     "compliance": {
@@ -242,14 +362,29 @@ KRI_DEFINITIONS = {
             "anonymize", "anonymized", "pseudonymize", "data subject",
             "right to access", "right to erasure", "right to be forgotten",
             "access control", "authorized users", "authorization",
-            "encrypt*"
+            "encrypt*",
+            # Named regulatory frameworks and governance vocabulary a
+            # compliance requirement is likely to cite directly, beyond
+            # GDPR (the only named regulation in the original list).
+            "hipaa", "sox", "sarbanes-oxley", "pci-dss", "pci dss",
+            "ccpa", "coppa", "ferpa", "iso 27001", "soc 2", "iso 9001",
+            "export control", "data residency", "data sovereignty",
+            "certification", "accreditation", "attestation", "conformance",
+            "regulatory body", "statutory", "mandat*", "compliance framework",
+            "governance framework", "data protection officer", "dpo",
+            "breach notification", "privacy impact assessment", "dpia",
+            "opt-in", "opt-out", "data minimization", "purpose limitation",
+            "third-party audit"
         ],
         "prototypes": [
             "the requirement is subject to legal regulatory contractual or policy obligations",
             "the requirement concerns privacy data protection retention or consent",
             "the requirement must satisfy an external standard or compliance obligation",
             "the requirement processes personal or sensitive data subject to data protection law",
-            "the requirement restricts access to protect personal or sensitive information"
+            "the requirement restricts access to protect personal or sensitive information",
+            "the requirement must conform to a named regulatory framework or industry standard such as gdpr hipaa sox or pci-dss",
+            "the requirement involves reporting certification or attestation to an external regulator or auditor",
+            "the requirement governs how long data is retained or when it must be deleted under a retention policy"
         ]
     },
     "complexity": {
@@ -259,7 +394,20 @@ KRI_DEFINITIONS = {
             "depends", "requires", "workflow",
             "process", "step", "component", "service",
             "integration", "interface", "condition", "rule", "exception",
-            "configuration"
+            "configuration",
+            # Architectural-pattern and interdependency vocabulary beyond
+            # the generic multi-step/multi-component language above --
+            # names the specific mechanisms (state machines, cascading
+            # effects, competing priorities) that are the actual source of
+            # Brooks' "accidental complexity" in real systems.
+            "orchestrat*", "choreograph*", "state machine", "workflow engine",
+            "business process", "approval chain", "escalation",
+            "circular dependency", "tight coupling", "loose coupling",
+            "cross-cutting", "edge case", "corner case",
+            "conflict resolution", "priorit*", "sequenc*",
+            "interdependen*", "downstream", "upstream", "cascad*",
+            "rollback", "compensat*", "saga pattern",
+            "distributed transaction"
         ] + _COMPLEXITY_DOMAIN_CUES,
         "prototypes": [
             "the requirement requires coordinating multiple distinct system components or subsystems with non-trivial interdependencies, beyond a single straightforward user action",
@@ -267,7 +415,10 @@ KRI_DEFINITIONS = {
             "the requirement contains multiple business rules that interact with or override each other, requiring careful sequencing or conflict resolution",
             "the requirement requires role based access control with permission hierarchies",
             "the requirement requires event driven or asynchronous notification delivery",
-            "the requirement requires aggregating or analyzing data from multiple sources"
+            "the requirement requires aggregating or analyzing data from multiple sources",
+            "the requirement involves a state machine or workflow engine coordinating multiple steps or approval stages",
+            "the requirement has cross-cutting concerns that interact with several unrelated parts of the system",
+            "the requirement requires resolving conflicts or priorities among competing business rules"
         ]
     },
     "ambiguity": {
@@ -289,7 +440,22 @@ KRI_DEFINITIONS = {
             "important", "key", "necessary", "critical", "various", "certain",
             "key information", "important events", "important information",
             "relevant information", "necessary details", "appropriate action",
-            "critical data"
+            "critical data",
+            # Placeholder markers and unmeasured quality goals: ISO/IEC/IEEE
+            # 29148's "unambiguous" and "verifiable" characteristics both
+            # treat these as defects -- a literal placeholder instead of a
+            # value, or a quality adjective with no stated measure, are
+            # textbook completeness/verifiability failures distinct from
+            # the hedge-word and vague-qualifier patterns above.
+            "tbd", "to be determined", "to be defined", "tba",
+            "to be announced", "where applicable", "if necessary",
+            "if needed", "if possible", "when appropriate", "as required",
+            "as applicable", "typically", "generally", "in general",
+            "mostly", "mainly", "primarily", "often", "sometimes",
+            "occasionally", "rarely", "acceptable", "satisfactory",
+            "optimal", "efficient", "effective", "robust", "flexible",
+            "state of the art", "industry standard", "best practice",
+            "reasonable time", "timely manner", "in a timely fashion"
             # Underspecified-scope verbs: a management/oversight action
             # named without stating what it covers or by what criteria it's
             # judged done (ISO/IEC/IEEE 29148's completeness criterion
@@ -322,7 +488,10 @@ KRI_DEFINITIONS = {
             "the requirement contains vague subjective or underspecified language",
             "the requirement permits multiple interpretations or alternatives",
             "the requirement lacks precise measurable acceptance conditions",
-            "the requirement names a management or oversight action without stating its scope or acceptance criteria"
+            "the requirement names a management or oversight action without stating its scope or acceptance criteria",
+            "the requirement uses a placeholder such as tbd or to be determined instead of a concrete value",
+            "the requirement describes a quality goal like robust efficient or user friendly without a measurable definition",
+            "the requirement's acceptance criteria depend on subjective judgment such as reasonable, acceptable, or as appropriate"
         ]
     }
 }
@@ -416,8 +585,10 @@ def co_occurs_with(text: str, base: str, qualifiers: List[str]) -> bool:
 
 
 _PERFORMANCE_QUANTIFIED_TARGET = re.compile(
-    r'\d+(\.\d+)?\s*(second|sec|ms|millisecond|minute|hour|'
-    r'user|customer|request|movie|concurrent)', re.I
+    r'\d+(\.\d+)?\s*(second|sec|ms|millisecond|minute|hour|day|week|month|'
+    r'user|customer|request|movie|concurrent|'
+    r'transaction|quer(y|ies)|operation|connection|node|instance|'
+    r'gb|mb|tb|kb|byte)', re.I
 )
 
 
@@ -432,7 +603,10 @@ def has_quantified_performance_target(text: str) -> bool:
     return bool(_PERFORMANCE_QUANTIFIED_TARGET.search(text))
 
 
-_NORMATIVE_OBLIGATION = re.compile(r"\b(shall|must|will|should)\b", re.I)
+_NORMATIVE_OBLIGATION = re.compile(
+    r"\b(shall|must|will|should|is required to|are required to|"
+    r"needs? to|has to|have to)\b", re.I
+)
 
 
 def has_normative_obligation(text: str) -> bool:
