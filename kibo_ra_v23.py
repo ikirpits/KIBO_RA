@@ -46,7 +46,7 @@ import time
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -272,11 +272,28 @@ GENERIC_SCOPE_VERB_CUES = [
 ]
 
 
-def distinct_complexity_domains(text: str) -> int:
-    return sum(
-        1 for cues in COMPLEXITY_DOMAINS.values()
-        if any(phrase_present(text, cue) for cue in cues)
-    )
+def distinct_complexity_domains(text: str, exclude_solo: Optional[Dict[str, set]] = None) -> int:
+    """Count distinct architectural domains this text touches.
+
+    `exclude_solo` names, per domain, "weak" cues that should not by
+    themselves count as evidence the domain is touched -- only when the
+    domain also has a hit from some other cue. Bare mentions of
+    login/authentication boilerplate ("username and password",
+    "authorized users") are near-universal in SRS documents and are not,
+    on their own, evidence of the kind of security engineering (crypto,
+    key management, threat modeling, MFA/SSO/federation -- all still
+    plain hits in this same domain list) that makes a requirement
+    architecturally complex; the same word is still full evidence for
+    other callers of this function (e.g. compliance, which does not pass
+    this argument and is completely unaffected).
+    """
+    exclude_solo = exclude_solo or {}
+    count = 0
+    for domain, cues in COMPLEXITY_DOMAINS.items():
+        weak = exclude_solo.get(domain, set())
+        if any(phrase_present(text, cue) for cue in cues if cue not in weak):
+            count += 1
+    return count
 
 
 # ---------------------------------------------------------------------------
@@ -521,7 +538,17 @@ KRI_DEFINITIONS = {
             # COMPLEXITY_DOMAINS list to avoid the cross-KRI risk seen
             # earlier when "remote" was tried (and reverted) as a security
             # cue on this same holdout.
-            "remote user*", "remote access", "remote client*"
+            "remote user*", "remote access", "remote client*",
+            # Round: operating-environment constraints -- IEEE 830 / ISO
+            # 29148 both name "Operating Environment" as its own distinct
+            # SRS constraint category (alongside functional requirements),
+            # because the system must fit a physical/organizational
+            # deployment context the functional text alone doesn't
+            # determine. Entirely uncovered by the existing vocabulary,
+            # which is all architecture-pattern or business-process
+            # focused, not physical/organizational-context focused.
+            "operating environment", "business environment", "office environment",
+            "physical environment", "deployment environment", "organizational context"
         ] + _COMPLEXITY_DOMAIN_CUES,
         "prototypes": [
             "the requirement requires coordinating multiple distinct system components or subsystems with non-trivial interdependencies, beyond a single straightforward user action",
@@ -566,7 +593,12 @@ KRI_DEFINITIONS = {
             # source, distinct from the concurrency prototype above -- the
             # underlying concern is network reachability and trust-boundary
             # crossing, not shared-state coordination.
-            "the requirement must support users connecting remotely or from outside the local network, not just users on a local or trusted network"
+            "the requirement must support users connecting remotely or from outside the local network, not just users on a local or trusted network",
+            # Round: operating-environment / deployment-context constraint,
+            # matching the new cues above -- a distinct IEEE 830 / ISO
+            # 29148 constraint category, not a rewording of any existing
+            # prototype.
+            "the requirement constrains the system to operate within a specific physical, organizational, or business environment, rather than any general-purpose setting"
         ]
     },
     "ambiguity": {
@@ -969,7 +1001,16 @@ class KIBORA:
             # file's fully-"shall"-phrased holdout set (see performance's
             # note above for why), so it's kept modest rather than tuned to
             # maximize pass rate against the actual values.
-            distinct_domains = distinct_complexity_domains(text)
+            # Bare authentication/authorization boilerplate ("username and
+            # password", "authorized users") is near-universal in SRS text
+            # and, alone, isn't evidence of security-driven architectural
+            # complexity the way the domain's other cues (crypto, key
+            # management, threat modeling, MFA/SSO/federation) are -- see
+            # distinct_complexity_domains()'s docstring. compliance's own
+            # use of this function (below) is untouched by this exclusion.
+            distinct_domains = distinct_complexity_domains(
+                text, exclude_solo={"security": {"authenticat*", "authoriz*"}}
+            )
             structural = (
                 0.25 * (1.0 if has_normative_obligation(text) else 0.0) +
                 0.18 * saturated(features["clauses"], 1.0) +
