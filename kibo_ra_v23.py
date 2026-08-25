@@ -15,9 +15,11 @@ Design principles
 4. Semantic evidence and linguistic evidence are combined transparently.
 5. Every KRI score has an evidence trace.
 
-Seven KRIs
-----------
-performance, security, io_accuracy, user_error, compliance, complexity, ambiguity
+Five KRIs
+---------
+performance, security, compliance, complexity, ambiguity
+(io_accuracy and user_error were dropped by request -- see git history
+for the removed KRI definitions if they're ever needed again.)
 
 Important methodological distinction
 ------------------------------------
@@ -96,7 +98,7 @@ DEFAULT_CONFIG = {
         "fitted_at": None,
         "coefficients": {
             kri: {"a": 1.0, "b": 0.0} for kri in [
-                "performance", "security", "io_accuracy", "user_error",
+                "performance", "security",
                 "compliance", "complexity", "ambiguity"
             ]
         }
@@ -223,72 +225,6 @@ KRI_DEFINITIONS = {
             "the requirement specifies encryption confidentiality integrity or identity verification"
         ]
     },
-    "io_accuracy": {
-        "name": "Data & I/O Integrity Risk",
-        "cues": [
-            "input", "output", "data", "record", "field", "value",
-            "validation", "validate", "verify", "verification", "accuracy",
-            "consistent", "consistency", "correct*", "incorrect", "mismatch",
-            "import", "export", "upload", "download", "select", "selection",
-            "store", "update", "delete", "transform", "calculate",
-            # COBIT APO14 Manage Data treats processing and state-changing
-            # operations on a record as core data-management activities,
-            # not just the literal input/output/store/update vocabulary
-            # already above.
-            "process*", "activat*"
-        ] + _COMPLEXITY_DOMAIN_CUES,
-        # WORKING HYPOTHESIS, weaker provenance than other KRIs in this
-        # file: the architectural-domain cues above were added because
-        # io_accuracy's ACTUAL expert scores correlate with complexity's
-        # actual scores at r=0.69 and compliance's at r=0.53 (measured on
-        # the labels themselves, not on this model's output), while literal
-        # I/O vocabulary (input/output/record/data) showed almost no
-        # relationship to the actual scores at all -- 15/25 items with zero
-        # literal I/O cue hits still carried actual scores of 0.65-0.79.
-        # Plausible reading: this panel's data-integrity risk judgment
-        # tracks architectural/regulatory exposure (COBIT ties data
-        # integrity to process complexity and control environment; GDPR
-        # Art. 5(1)(d)'s accuracy principle ties data accuracy directly to
-        # regulatory exposure) rather than surface I/O language. But this
-        # was inferred FROM this dataset's pattern, not confirmed against
-        # an independent rubric -- unlike the complexity/compliance/
-        # ambiguity additions elsewhere in this file, which were
-        # literature-first and only checked against data afterward.
-        # Revisit if/when the actual scoring rubric is available.
-        "prototypes": [
-            "the requirement involves input output or data validation",
-            "the requirement requires accurate consistent or complete data handling",
-            "the requirement reads writes transforms imports or exports data",
-            "the requirement's data integrity risk depends on the surrounding architectural or regulatory complexity rather than explicit data handling language"
-        ]
-    },
-    "user_error": {
-        "name": "User Interaction Risk",
-        "cues": [
-            "user*", "select", "selection", "choose", "choice", "enter",
-            "input", "submit", "confirm", "cancel", "mistake", "error",
-            "misclick", "incorrect", "wrong", "warning", "message",
-            "undo", "validation", "guidance", "help",
-            # Usability-quality vocabulary: Nielsen's usability heuristics
-            # (consistency & standards, recognition over recall, error
-            # prevention/recovery, aesthetic & minimalist design) and ISO
-            # 25010's usability characteristic treat these as *directly*
-            # bearing on whether a user makes a mistake, not just adjacent
-            # to it -- a requirement demanding the interface be intuitive,
-            # consistent, or navigable is a requirement about preventing
-            # user error, even with no interaction verb (select/submit/etc.)
-            # present.
-            "intuitive", "self explanatory", "self-explanatory",
-            "usab*", "learnab*", "user friendly", "user-friendly",
-            "navigation", "menu", "look and feel", "verbiage",
-            "terminology", "color scheme", "font*"
-        ],
-        "prototypes": [
-            "the requirement contains user interaction that may lead to input or selection errors",
-            "the requirement needs validation feedback warnings or error handling",
-            "the requirement involves user choices or multiple interaction steps"
-        ]
-    },
     "compliance": {
         "name": "Compliance & Regulatory Risk",
         "cues": [
@@ -359,8 +295,7 @@ KRI_DEFINITIONS = {
             # judged done (ISO/IEC/IEEE 29148's completeness criterion
             # treats this as a defect; Wiegers & Beatty discuss
             # underspecified scope as an incompleteness/ambiguity source).
-            # PROVENANCE NOTE, same weaker-evidence status as io_accuracy's
-            # architectural-domain addition: this specific verb set was
+            # PROVENANCE NOTE, weaker-evidence status: this specific verb set was
             # identified by testing against this dataset's actual-value
             # ranking, not literature-first. Checked for generalization
             # before inclusion: a broader 24-verb version of this concept,
@@ -373,8 +308,16 @@ KRI_DEFINITIONS = {
             # weaker provenance; revisit if a rubric becomes available.
             # List itself lives in GENERIC_SCOPE_VERB_CUES (single source
             # of truth, avoids drift between the cue list and the
-            # structural term below that also reads from it).
-        ] + GENERIC_SCOPE_VERB_CUES,
+            # structural term below that also reads from it). NOT
+            # concatenated into this cues list (unlike an earlier version):
+            # count_generic_scope_verb_hits() applies an agent-noun
+            # exclusion (e.g. "supervisors" shouldn't count -- see its
+            # docstring) and a quantified-target suppression that a plain
+            # count_cues() match against this list would silently bypass,
+            # double-counting the same false positive into hit_count. The
+            # structural term below is the only place these cues are
+            # counted.
+        ],
         "prototypes": [
             "the requirement contains vague subjective or underspecified language",
             "the requirement permits multiple interpretations or alternatives",
@@ -394,8 +337,6 @@ KRI_ORDER = list(KRI_DEFINITIONS)
 KRI_COBIT_MAPPING = {
     "performance": ["BAI04_Manage Availability and Capacity", "DSS01_Manage Operations"],
     "security": ["APO13_Manage Security", "DSS05_Manage Security Services"],
-    "io_accuracy": ["APO14_Manage Data", "BAI03_Manage Solutions Identification and Build"],
-    "user_error": ["DSS02_Manage Service Requests and Incidents", "BAI07_Manage Change Acceptance and Transitioning"],
     "compliance": ["MEA03_Ensure Compliance With External Requirements", "EDM03_Ensure Risk Optimization"],
     "complexity": ["BAI02_Manage Requirements Definition", "BAI03_Manage Solutions Identification and Build"],
     "ambiguity": ["BAI02_Manage Requirements Definition", "APO11_Manage Quality"]
@@ -661,8 +602,8 @@ class KIBORA:
             concurrent_user_context = co_occurs_with(
                 text, "user*", ["multiple", "concurrent", "simultaneous", "many"]
             )
-            # No obligation floor here (unlike complexity/io_accuracy/
-            # compliance/user_error/ambiguity below): on this file's own
+            # No obligation floor here (unlike complexity/compliance/
+            # ambiguity below): on this file's own
             # holdout set every item is phrased as a formal "shall/must/
             # will/should" obligation, so has_normative_obligation() is True
             # for all of them -- meaning any such floor is a per-KRI
@@ -678,7 +619,7 @@ class KIBORA:
             )
 
         elif kri == "complexity":
-            # Baseline term, same status as compliance's/io_accuracy's: a
+            # Baseline term, same status as compliance's: a
             # requirement only exists inside a larger system of interacting
             # components, so it inherits some integration/coordination
             # complexity merely by being a governed deliverable (COBIT BAI02
@@ -728,33 +669,6 @@ class KIBORA:
                 0.35 * saturated(generic_verb_hits, 1.5)
             )
 
-        elif kri == "user_error":
-            # Baseline term, weaker provenance than compliance's (see note
-            # there): every implemented requirement is executed against, or
-            # interpreted by, real people (end users, operators, or the
-            # developers/testers implementing the spec), so ambiguity- or
-            # gap-driven deviation from intent is a nonzero risk even for
-            # requirements with no direct end-user interaction (Wiegers &
-            # Beatty on ambiguity-driven implementation defects; ISO 25010
-            # "usability in use" is not limited to direct UI). Given a
-            # smaller weight than compliance's obligation floor since the
-            # link is more indirect.
-            # CONSERVATIVE WEIGHT: constant on this holdout set (every item
-            # uses shall/must/will/should), so its magnitude was NOT chosen
-            # by maximizing pass rate against it -- kept at this same
-            # modest value rather than the higher one an earlier pass tried.
-            # That pass pushed this floor to 0.80 and reached 95% pass on
-            # this holdout, which is the overfitting signal that prompted
-            # pulling it back to this more defensible level.
-            structural = (
-                0.30 * (1.0 if has_normative_obligation(text) else 0.0) +
-                0.30 * saturated(
-                    features["alternatives"] + features["conditions"], 2.0
-                ) +
-                0.15 * saturated(features["vague_terms"], 1.5) +
-                0.25 * saturated(hit_count, 2.0)
-            )
-
         elif kri == "security":
             access_control_context = co_occurs_with(
                 text, "access",
@@ -779,25 +693,6 @@ class KIBORA:
                 0.35 * (1.0 if role_restriction_pattern else 0.0)
             )
 
-        elif kri == "io_accuracy":
-            # Baseline term, same status as compliance's: any formally
-            # specified system behavior implies data flowing through the
-            # system in some form (input, state, or output) whose
-            # correctness the requirement implicitly depends on -- COBIT
-            # APO14 Manage Data treats data integrity as a property of the
-            # governed system as a whole, not only of requirements that use
-            # explicit I/O vocabulary.
-            # CONSERVATIVE WEIGHT: this floor is a per-KRI constant on this
-            # file's fully-"shall"-phrased holdout set (see complexity's note
-            # above for why), kept modest rather than tuned to maximize pass
-            # rate against the actual values.
-            distinct_domains = distinct_complexity_domains(text)
-            structural = (
-                0.20 * (1.0 if has_normative_obligation(text) else 0.0) +
-                0.45 * saturated(hit_count, 2.5) +
-                0.35 * saturated(distinct_domains, 2.0)
-            )
-
         elif kri == "compliance":
             # Every requirement phrased as a formal obligation is, by
             # ISO/IEC/IEEE 29148's own definition of a governed SDLC
@@ -807,10 +702,9 @@ class KIBORA:
             # that name a regulation) -- independent of whether the text
             # itself uses compliance vocabulary. distinct_domains catches
             # the compliance-adjacent architectural domains (compliance,
-            # access_control, data_sensitivity, security) the same way
-            # io_accuracy's domain signal above does, for the same reason:
-            # this kind of exposure is often architectural/regulatory
-            # rather than lexically stated.
+            # access_control, data_sensitivity, security): this kind of
+            # exposure is often architectural/regulatory rather than
+            # lexically stated.
             # CONSERVATIVE WEIGHT: this floor is a per-KRI constant on this
             # file's fully-"shall"-phrased holdout set (see complexity's note
             # above for why), kept modest rather than tuned to maximize pass
@@ -827,14 +721,12 @@ class KIBORA:
 
         # Same halving reasoning applied here as in security/complexity's own
         # branches above (one clear signal should count for more), scoped
-        # to only these three KRIs so io_accuracy/user_error/compliance/
-        # ambiguity are unaffected - their hit_count saturation stays at the
-        # original 2.0.
+        # to only these three KRIs so compliance/ambiguity are unaffected -
+        # their hit_count saturation stays at the original 2.0.
         hit_count_scale = 1.0 if kri in ("performance", "security", "complexity") else 2.0
-        # compliance/user_error/io_accuracy get a structural-dominant blend:
-        # their governing judgment (governance obligation, human-
-        # interpretation risk, data-integrity exposure) is architectural/
-        # structural rather than a matter of which specific words appear.
+        # compliance gets a structural-dominant blend: its governing
+        # judgment (governance obligation) is architectural/structural
+        # rather than a matter of which specific words appear.
         # performance/security get a smaller bump: their strongest signals
         # (a quantified numeric target; an "only X can Y" authorization
         # pattern) are themselves structural, not lexical-hit-count, and
@@ -842,16 +734,25 @@ class KIBORA:
         # (IEEE 830/ISO 25010 define performance requirements by their
         # measurable target; "only X can Y" is authorization regardless of
         # vocabulary) rather than a soft heuristic that needs hit-count
-        # corroboration. complexity/ambiguity keep the original 65/35
-        # hit-count-led blend. This weight is left as-is (not itself pulled
-        # back) even though the "CONSERVATIVE WEIGHT" floors above were --
-        # it also amplifies the genuinely per-item signals in these same
-        # structural terms (domains, quantified targets, hit counts, the
-        # role-restriction pattern), which vary per item and aren't subject
-        # to the dataset-constant critique the floors are.
+        # corroboration. complexity keeps the original 65/35 hit-count-led
+        # blend. ambiguity gets a modest bump (0.35 -> 0.42): its
+        # generic-scope-verb signal now lives only in the structural term
+        # (moved out of hit_count -- see the note on GENERIC_SCOPE_VERB_CUES
+        # not being concatenated into ambiguity's cues list above, which
+        # fixed a real double-counting bug where the agent-noun/quantified-
+        # target exclusions applied to the structural term but not to
+        # hit_count computed from the same cue list). This weight is left
+        # as-is elsewhere (not itself pulled back) even though the
+        # "CONSERVATIVE WEIGHT" floors above were -- it also amplifies the
+        # genuinely per-item signals in these same structural terms
+        # (domains, quantified targets, hit counts, the role-restriction
+        # pattern), which vary per item and aren't subject to the
+        # dataset-constant critique the floors are.
         structural_weight = 0.70 if kri in ("compliance",) else (
-            0.55 if kri in ("user_error", "io_accuracy", "complexity") else (
-                0.50 if kri in ("performance", "security") else 0.35
+            0.55 if kri in ("complexity",) else (
+                0.50 if kri in ("performance", "security") else (
+                    0.42 if kri in ("ambiguity",) else 0.35
+                )
             )
         )
         hit_weight = 1.0 - structural_weight
@@ -1087,8 +988,7 @@ def fit_calibration(
 
     calibration_path must contain a text column (default "text") and one
     column per KRI to calibrate, holding expert scores (same naming as
-    KRI_ORDER — performance, security, io_accuracy, user_error, compliance,
-    complexity, ambiguity).
+    KRI_ORDER — performance, security, compliance, complexity, ambiguity).
 
     KRIs whose fit correlation on this set falls below min_correlation are
     left at identity (no-op) and flagged, unless explicitly named in
