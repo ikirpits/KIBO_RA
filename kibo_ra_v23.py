@@ -46,7 +46,7 @@ import time
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -194,7 +194,13 @@ COMPLEXITY_DOMAINS = {
         "sensitive data", "personal data", "user data", "pii",
         "phi", "financial data", "health record*",
         "confidential information", "trade secret", "special category data",
-        "biometric data"
+        "biometric data",
+        # PCI-DSS-scoped payment card data -- its own recognized regulated-
+        # data category (distinct from "financial data" generally), naming
+        # the instrument directly since requirements rarely say "financial
+        # data" when they mean a specific payment card.
+        "payment card", "pre-paid card", "prepaid card", "credit card",
+        "debit card", "cardholder data"
     ],
     # Activity tracking/monitoring infrastructure (audit trails, usage
     # logging, observability tooling) is architecturally non-trivial in its
@@ -272,7 +278,54 @@ GENERIC_SCOPE_VERB_CUES = [
 ]
 
 
-def distinct_complexity_domains(text: str, exclude_solo: Optional[Dict[str, set]] = None) -> int:
+# "Only <actor> can/may/shall <verb>", and its passive-voice mirror
+# "<verb> can/may/shall only be <done> by <actor>", are the canonical
+# natural-language phrasing of an authorization/access-restriction
+# requirement (the same underlying concept access_control's role*/
+# permission*/rbac/entitlement vocabulary names lexically) regardless of
+# which specific role or action is named -- e.g. "only supervisors can
+# advertise..." restricts an action to a role without using the word
+# "role" at all. A syntactic pattern rather than a word list, so it
+# generalizes across domains instead of being tied to specific role names.
+_RESTRICTED_ACTION_PATTERN = re.compile(
+    r'\bonly\b.{0,40}?\b(can|may|shall|will|is allowed to|are allowed to|'
+    r'is permitted to|are permitted to|has permission to|have permission to)\b'
+    r'|\b(can|may|shall|will|is|are)\s+only\s+be\s+\w+\s+by\b',
+    re.I
+)
+
+
+def has_restricted_action_pattern(text: str) -> bool:
+    return bool(_RESTRICTED_ACTION_PATTERN.search(text))
+
+
+# A statistical acceptance criterion -- a population percentage bound to
+# a time- or outcome-bound target ("70% of registered users shall find a
+# solution within 5 minutes") -- compounds two separately-varying
+# conditions into one requirement, which ISO/IEC 29148 names as a
+# verifiability concern distinct from a simple deterministic constraint
+# (a single percentage alone, like an uptime SLA's "available 99% of the
+# time", is not this pattern -- the denominator must be a population,
+# not a duration, and there must be a distinct outcome the population
+# must achieve).
+_STATISTICAL_POPULATION_TARGET = re.compile(
+    r'\d+(\.\d+)?\s*%\s*of\s+(registered\s+|active\s+)?'
+    r'(users?|customers?|clients?|members?|subscribers?|visitors?|people|employees?)\b'
+    r'.{0,80}?\b(shall|will|must|should|can|may)\b.{0,40}?\b'
+    r'(find|resolve|solve|complete|succeed|achieve|obtain|receive|report|respond)\w*',
+    re.I | re.S
+)
+
+
+def has_statistical_population_target(text: str) -> bool:
+    return bool(_STATISTICAL_POPULATION_TARGET.search(text))
+
+
+def distinct_complexity_domains(
+    text: str,
+    exclude_solo: Optional[Dict[str, set]] = None,
+    extra_signals: Optional[Dict[str, Callable[[str], bool]]] = None,
+) -> int:
     """Count distinct architectural domains this text touches.
 
     `exclude_solo` names, per domain, "weak" cues that should not by
@@ -286,12 +339,21 @@ def distinct_complexity_domains(text: str, exclude_solo: Optional[Dict[str, set]
     architecturally complex; the same word is still full evidence for
     other callers of this function (e.g. compliance, which does not pass
     this argument and is completely unaffected).
+
+    `extra_signals` names, per domain, an alternate (non-word-list)
+    predicate that also counts as touching that domain -- e.g. a
+    syntactic pattern that expresses the domain's concept without using
+    any of its literal cue words.
     """
     exclude_solo = exclude_solo or {}
+    extra_signals = extra_signals or {}
     count = 0
     for domain, cues in COMPLEXITY_DOMAINS.items():
         weak = exclude_solo.get(domain, set())
-        if any(phrase_present(text, cue) for cue in cues if cue not in weak):
+        touched = any(phrase_present(text, cue) for cue in cues if cue not in weak)
+        if not touched and domain in extra_signals:
+            touched = extra_signals[domain](text)
+        if touched:
             count += 1
     return count
 
@@ -1018,8 +1080,16 @@ class KIBORA:
                 exclude_solo={
                     "security": {"authenticat*", "authoriz*"},
                     "deployment": {"release"},
-                }
+                },
+                extra_signals={"access_control": has_restricted_action_pattern},
             )
+            # A compound statistical acceptance criterion isn't any of the
+            # named architectural domains above -- see
+            # has_statistical_population_target()'s docstring -- so it's
+            # credited directly as an additional domain touched rather
+            # than folded into an unrelated one.
+            if has_statistical_population_target(text):
+                distinct_domains += 1
             structural = (
                 0.25 * (1.0 if has_normative_obligation(text) else 0.0) +
                 0.18 * saturated(features["clauses"], 1.0) +
