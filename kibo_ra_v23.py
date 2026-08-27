@@ -397,7 +397,20 @@ KRI_DEFINITIONS = {
             "query optimization", "indexing", "n+1 quer*",
             "packet loss", "jitter", "round trip time",
             "graceful degradation", "performance degradation", "slowdown",
-            "page load", "time to first byte", "ttfb"
+            "page load", "time to first byte", "ttfb",
+            # Round: multi-threading/traffic -- ISO 25010's resource-
+            # utilization and capacity sub-characteristics named directly
+            # (concurrency mechanism, load source) rather than via the
+            # abstract vocabulary (parallel*, concurrent, simultaneous)
+            # already present, which a text can express performance
+            # content through without using literally.
+            "multi-thread*", "multithread*", "traffic",
+            # Round: capacity-limit phrasing as requirements actually
+            # state it ("capable of supporting N", "a maximum of N") --
+            # ISO 25010 capacity sub-characteristic, phrased operationally
+            # rather than with the bare "capacity" cue already present.
+            "capable of supporting", "maximum of", "supports up to",
+            "support up to", "supports a maximum", "support a maximum"
         ],
         "prototypes": [
             "the requirement specifies response time or system performance",
@@ -868,6 +881,16 @@ _PERFORMANCE_QUANTIFIED_TARGET = re.compile(
     r'gb|mb|tb|kb|byte)', re.I
 )
 
+# "N% of the time" is the canonical uptime/availability SLA phrasing
+# (99% of the time, 99.99% of the time) -- kept as its own narrower
+# pattern rather than loosening the bare-'%' exclusion above, so it still
+# doesn't match the false positive that exclusion exists for ("95% of
+# pages approved...", "95% of the product look & feel...": a population
+# or an artifact, not a duration).
+_PERFORMANCE_UPTIME_TARGET = re.compile(
+    r'\d+(\.\d+)?\s*%\s*of\s+the\s+time', re.I
+)
+
 
 def has_quantified_performance_target(text: str) -> bool:
     """A number paired with an explicit time/capacity unit - a genuine
@@ -876,8 +899,13 @@ def has_quantified_performance_target(text: str) -> bool:
     and test-coverage rates all use percentages without being performance
     targets - see the false positive this caught: '95% of pages approved
     by the Architecture group', a documentation workflow, not a
-    performance requirement, despite containing a number)."""
-    return bool(_PERFORMANCE_QUANTIFIED_TARGET.search(text))
+    performance requirement, despite containing a number) -- except for
+    the "N% of the time" uptime-SLA idiom specifically, which is a
+    duration fraction, not a population or artifact fraction."""
+    return bool(
+        _PERFORMANCE_QUANTIFIED_TARGET.search(text)
+        or _PERFORMANCE_UPTIME_TARGET.search(text)
+    )
 
 
 _NORMATIVE_OBLIGATION = re.compile(
