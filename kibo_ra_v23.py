@@ -411,7 +411,15 @@ KRI_DEFINITIONS = {
             # rather than with the bare "capacity" cue already present.
             "capable of supporting", "maximum of", "supports up to",
             "support up to", "supports a maximum", "support a maximum",
-            "support multiple", "remote user*"
+            "support multiple", "remote user*",
+            # Round: client-server/networked architecture -- naming a
+            # network-mediated deployment topology (as opposed to a
+            # purely local/embedded system) is time-behaviour-relevant
+            # the same way "remote user*" above is (network round trips
+            # are a first-order response-time factor per ISO 25010),
+            # just stated as an architectural fact rather than a user
+            # population fact.
+            "web application server", "application server", "web server"
         ],
         "prototypes": [
             "the requirement specifies response time or system performance",
@@ -1107,6 +1115,20 @@ class KIBORA:
                 0.20 * (1.0 if concurrent_user_context else 0.0) +
                 0.25 * features["length_ratio"]
             )
+            # A statistical acceptance criterion ("70% of registered
+            # users shall find a solution within 5 minutes") is a
+            # response-time SLA for a population -- textbook ISO 25010
+            # time-behaviour content -- but its structural credit above
+            # is already fully earned via has_quantified_performance_
+            # target() (the same text also has a bare duration target),
+            # so crediting it again there would be a no-op. Give it
+            # hit-count credit instead, the same as any other cue would
+            # get, since count_cues() can't see this compound pattern.
+            # Reuses has_statistical_population_target() from complexity's
+            # KRI branch below, already verified (there) to fire on
+            # exactly one item across the full holdout.
+            if has_statistical_population_target(text):
+                hit_count += 1
 
         elif kri == "complexity":
             # Baseline term, same status as compliance's: a
