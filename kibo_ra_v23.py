@@ -410,7 +410,8 @@ KRI_DEFINITIONS = {
             # ISO 25010 capacity sub-characteristic, phrased operationally
             # rather than with the bare "capacity" cue already present.
             "capable of supporting", "maximum of", "supports up to",
-            "support up to", "supports a maximum", "support a maximum"
+            "support up to", "supports a maximum", "support a maximum",
+            "support multiple"
         ],
         "prototypes": [
             "the requirement specifies response time or system performance",
@@ -891,6 +892,13 @@ _PERFORMANCE_UPTIME_TARGET = re.compile(
     r'\d+(\.\d+)?\s*%\s*of\s+the\s+time', re.I
 )
 
+# A wall-clock time range ("between 12:00AM and 6:00PM") is a quantified
+# availability window -- the same time-behaviour content as a duration
+# target, just expressed as clock times rather than an elapsed amount.
+_PERFORMANCE_CLOCK_TIME = re.compile(
+    r'\d{1,2}:\d{2}\s*(am|pm)', re.I
+)
+
 
 def has_quantified_performance_target(text: str) -> bool:
     """A number paired with an explicit time/capacity unit - a genuine
@@ -901,10 +909,13 @@ def has_quantified_performance_target(text: str) -> bool:
     by the Architecture group', a documentation workflow, not a
     performance requirement, despite containing a number) -- except for
     the "N% of the time" uptime-SLA idiom specifically, which is a
-    duration fraction, not a population or artifact fraction."""
+    duration fraction, not a population or artifact fraction. Also
+    counts an explicit wall-clock time range as a quantified availability
+    window."""
     return bool(
         _PERFORMANCE_QUANTIFIED_TARGET.search(text)
         or _PERFORMANCE_UPTIME_TARGET.search(text)
+        or _PERFORMANCE_CLOCK_TIME.search(text)
     )
 
 
