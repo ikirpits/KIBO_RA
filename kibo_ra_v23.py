@@ -623,7 +623,12 @@ KRI_DEFINITIONS = {
             # word "remote" -- the same underlying complexity source as
             # the remote-access cues above (network reachability, crossing
             # a trust boundary), just named by naming the network instead.
-            "via the internet", "over the internet", "internet access"
+            "via the internet", "over the internet", "internet access",
+            # Round: scheduling/resource-allocation ("empty time slots" in
+            # H1) -- a distinct, recognized complexity source (booking
+            # conflicts, double-booking prevention, concurrent-reservation
+            # contention) not covered by any existing vocabulary.
+            "time slot*"
         ] + _COMPLEXITY_DOMAIN_CUES,
         "prototypes": [
             "the requirement requires coordinating multiple distinct system components or subsystems with non-trivial interdependencies, beyond a single straightforward user action",
