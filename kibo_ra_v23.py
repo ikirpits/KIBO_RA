@@ -411,7 +411,7 @@ KRI_DEFINITIONS = {
             # rather than with the bare "capacity" cue already present.
             "capable of supporting", "maximum of", "supports up to",
             "support up to", "supports a maximum", "support a maximum",
-            "support multiple"
+            "support multiple", "remote user*"
         ],
         "prototypes": [
             "the requirement specifies response time or system performance",
