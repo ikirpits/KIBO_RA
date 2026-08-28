@@ -278,6 +278,21 @@ GENERIC_SCOPE_VERB_CUES = [
 ]
 
 
+# Performance's capacity-limit cues ("capable of supporting N", "a
+# maximum of N", "support multiple") are, semantically, exactly the same
+# ISO/IEC 25010 capacity-sub-characteristic claim as the
+# "multiple/concurrent/simultaneous users" pattern concurrent_user_context
+# checks for below -- just phrased as an operational capacity statement
+# rather than a population-plurality statement. Named here so both the
+# cue list and that structural check read from the same source instead of
+# two independently-maintained lists that could drift apart.
+_PERFORMANCE_CAPACITY_PHRASES = [
+    "capable of supporting", "maximum of", "supports up to",
+    "support up to", "supports a maximum", "support a maximum",
+    "support multiple",
+]
+
+
 # "Only <actor> can/may/shall <verb>", and its passive-voice mirror
 # "<verb> can/may/shall only be <done> by <actor>", are the canonical
 # natural-language phrasing of an authorization/access-restriction
@@ -409,9 +424,9 @@ KRI_DEFINITIONS = {
             # state it ("capable of supporting N", "a maximum of N") --
             # ISO 25010 capacity sub-characteristic, phrased operationally
             # rather than with the bare "capacity" cue already present.
-            "capable of supporting", "maximum of", "supports up to",
-            "support up to", "supports a maximum", "support a maximum",
-            "support multiple", "remote user*",
+            # (List lives in _PERFORMANCE_CAPACITY_PHRASES, shared with
+            # the concurrent_user_context structural check below.)
+            *_PERFORMANCE_CAPACITY_PHRASES, "remote user*",
             # Round: client-server/networked architecture -- naming a
             # network-mediated deployment topology (as opposed to a
             # purely local/embedded system) is time-behaviour-relevant
@@ -1104,8 +1119,14 @@ class KIBORA:
             # users -- an entity can handle), so it gets its own signal
             # alongside the quantified-target one rather than only being
             # caught incidentally by the "concurrent" lexical cue.
+            # Also true for the operational capacity-limit phrasings
+            # ("capable of supporting N", "a maximum of N") -- the same
+            # ISO 25010 capacity claim, just not stated as a population-
+            # plurality fact. See _PERFORMANCE_CAPACITY_PHRASES.
             concurrent_user_context = co_occurs_with(
                 text, "user*", ["multiple", "concurrent", "simultaneous", "many"]
+            ) or any(
+                phrase_present(text, cue) for cue in _PERFORMANCE_CAPACITY_PHRASES
             )
             # No obligation floor here (unlike complexity/compliance/
             # ambiguity below): on this file's own
