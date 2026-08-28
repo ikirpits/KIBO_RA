@@ -419,7 +419,8 @@ KRI_DEFINITIONS = {
             # are a first-order response-time factor per ISO 25010),
             # just stated as an architectural fact rather than a user
             # population fact.
-            "web application server", "application server", "web server"
+            "web application server", "application server", "web server",
+            "web service"
         ],
         "prototypes": [
             "the requirement specifies response time or system performance",
@@ -437,7 +438,13 @@ KRI_DEFINITIONS = {
             # showed to be safe.
             "the requirement specifies a service level agreement or uptime guarantee the system must meet",
             "the requirement requires load or stress testing to verify the system performs correctly under peak demand",
-            "the requirement addresses performance degradation such as slowdown under load or cache-related delay"
+            "the requirement addresses performance degradation such as slowdown under load or cache-related delay",
+            # Round: the canonical "action completes within an explicit
+            # time limit" requirement template (IEEE 830 / Volere), more
+            # concrete than the generic "response time" prototype above --
+            # names the actor-action-deadline shape directly rather than
+            # the abstract quality attribute.
+            "the requirement specifies that a particular user action or system operation must complete within an explicit time limit"
         ]
     },
     "security": {
