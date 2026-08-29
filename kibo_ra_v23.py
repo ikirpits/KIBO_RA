@@ -459,7 +459,14 @@ KRI_DEFINITIONS = {
             # concrete than the generic "response time" prototype above --
             # names the actor-action-deadline shape directly rather than
             # the abstract quality attribute.
-            "the requirement specifies that a particular user action or system operation must complete within an explicit time limit"
+            "the requirement specifies that a particular user action or system operation must complete within an explicit time limit",
+            # Round: names the exact-population-count capacity pattern
+            # directly (H20's "capable of supporting 100 000 customers")
+            # rather than only via the more abstract "concurrent users,
+            # transactions, or peak load" prototype already present --
+            # closer to how this specific, common SRS phrasing (a bare
+            # target headcount) actually reads.
+            "the requirement specifies the exact number of users or customers the system must be able to support"
         ]
     },
     "security": {
