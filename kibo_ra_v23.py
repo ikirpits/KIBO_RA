@@ -435,7 +435,33 @@ KRI_DEFINITIONS = {
             # just stated as an architectural fact rather than a user
             # population fact.
             "web application server", "application server", "web server",
-            "web service"
+            "web service",
+            # Round: broader ISO 25010 / SRE-practice vocabulary sweep for
+            # generalizability beyond this holdout -- none of these fire
+            # on any of the 21 items here (checked before adding), so this
+            # is pure vocabulary enrichment, not aimed at closing any
+            # current miss. Three groups the existing list didn't reach:
+            #
+            # (1) Performance observability/monitoring -- ISO 25010 time
+            # behaviour and capacity are only meaningful if measured;
+            # requirements naming the measurement tooling itself are
+            # performance requirements even without a number attached.
+            "performance monitoring", "application performance monitoring",
+            "apm", "telemetry", "observability", "performance metrics",
+            "performance dashboard",
+            # (2) Resilience/fault-tolerance patterns that exist
+            # specifically to preserve performance under adverse
+            # conditions (distinct from complexity's "graceful
+            # degradation" reading of the same territory -- these name
+            # the mechanism, not the failure mode).
+            "circuit breaker", "load shedding", "backpressure", "retry*",
+            "fallback", "throttl*", "debounc*",
+            # (3) Resource-utilization vocabulary (ISO 25010's third
+            # sub-characteristic, alongside time behaviour and capacity)
+            # not reached by round 1's cpu/memory/bandwidth sweep --
+            # memory-management failure modes and pooling patterns.
+            "memory leak", "garbage collection", "gc pause",
+            "connection pool*", "thread pool*", "resource pool*", "cdn"
         ],
         "prototypes": [
             "the requirement specifies response time or system performance",
