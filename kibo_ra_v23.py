@@ -503,7 +503,22 @@ KRI_DEFINITIONS = {
             "secrets management", "vault", "iam",
             "identity and access management", "csp", "content security policy",
             "cors", "same-origin policy", "clickjacking", "man-in-the-middle",
-            "replay attack", "session hijacking", "privilege escalation"
+            "replay attack", "session hijacking", "privilege escalation",
+            # Round: availability -- the third pillar of the CIA triad
+            # (Confidentiality, Integrity, Availability), the foundational
+            # model this KRI's name ("Security Control Exposure") is built
+            # on. "confidential" and "integrity" were already cues; this
+            # list had no availability vocabulary at all despite it being
+            # an equally core security property under ISO 27001/NIST SP
+            # 800-53. Deliberately narrow: bare "availab*" was tried and
+            # reverted (it also matches ordinary uptime-SLA phrasing like
+            # "available 99% of the time", which this holdout rates much
+            # lower on security than on performance -- see H16, already
+            # passing, which the bare cue overshot). "High availability"
+            # and denial-of-service resistance are the phrasings that
+            # specifically signal availability-as-a-security-control
+            # rather than availability-as-an-SLA-number.
+            "high availability", "denial of service", "dos attack", "ddos"
         ],
         "prototypes": [
             "the requirement specifies authentication authorization or access control",
