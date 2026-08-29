@@ -492,7 +492,28 @@ KRI_DEFINITIONS = {
             # transactions, or peak load" prototype already present --
             # closer to how this specific, common SRS phrasing (a bare
             # target headcount) actually reads.
-            "the requirement specifies the exact number of users or customers the system must be able to support"
+            "the requirement specifies the exact number of users or customers the system must be able to support",
+            # Round: retried per explicit request, accepting the ripple
+            # risk to other items in this KRI's semantic pool that the
+            # first attempt at this same concept demonstrated (it flipped
+            # H20 from a pass to a miss even though H20's own content was
+            # untouched -- see git history). Same underlying content as
+            # before: correctly preventing two actors from claiming the
+            # same shared, limited resource (e.g. a booking slot) requires
+            # synchronizing concurrent updates to shared state, genuine
+            # (if implicit, not directly text-stated) time-behaviour
+            # content. Still the weakest-grounded prototype in this pool.
+            "the requirement involves claiming or reserving a shared, limited resource, requiring the system to correctly handle concurrent attempts to claim the same item",
+            # Round: names H10's "established physical web service
+            # structure" pattern -- operating through a networked/web
+            # service architecture rather than a purely local system is
+            # genuine time-behaviour content (network round trips are a
+            # first-order response-time factor per ISO 25010), the same
+            # justification already used for the "web application server"/
+            # "remote user*"/"web service" lexical cues, extended here to
+            # the semantic side for a text where the lexical cue alone
+            # (already present) wasn't enough on its own.
+            "the requirement specifies that the system operates through a networked or web-based service architecture, where network communication affects response time"
         ]
     },
     "security": {
