@@ -466,23 +466,7 @@ KRI_DEFINITIONS = {
             # transactions, or peak load" prototype already present --
             # closer to how this specific, common SRS phrasing (a bare
             # target headcount) actually reads.
-            "the requirement specifies the exact number of users or customers the system must be able to support",
-            # Round: an inferential attempt at H1's pattern ("only
-            # supervisors can advertise empty time slots") -- not a
-            # direct match to any of the abstract performance quality
-            # attributes above, but the underlying operation (claiming a
-            # shared, contested resource slot) is real-time-behaviour
-            # content: correctly preventing two actors from claiming the
-            # same slot requires the system to serialize or synchronize
-            # concurrent updates to shared availability state, a genuine
-            # (if implicit) time-behaviour/concurrency concern distinct
-            # from the plain access-control reading of the same text.
-            # Flagged explicitly as the weakest-grounded prototype in
-            # this KRI's pool -- inferred from what implementing the
-            # requirement correctly would require, not from a directly
-            # stated performance term the way every other prototype here
-            # is.
-            "the requirement involves claiming or reserving a shared, limited resource, requiring the system to correctly handle concurrent attempts to claim the same item"
+            "the requirement specifies the exact number of users or customers the system must be able to support"
         ]
     },
     "security": {
