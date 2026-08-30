@@ -1250,6 +1250,22 @@ class KIBORA:
             # exactly one item across the full holdout.
             if has_statistical_population_target(text):
                 hit_count += 1
+            # Account/instrument/service activation is a recognized,
+            # time-critical onboarding operation in its own right (product/
+            # growth-engineering "activation funnel" latency; card/account
+            # activation specifically has established SLA expectations in
+            # fintech) -- distinct from the "pre-paid card" cue above,
+            # which names the instrument, not the operation. Co-occurrence
+            # rather than a bare "activat*" cue since activation of an
+            # arbitrary minor feature (e.g. "activate dark mode") isn't
+            # inherently performance-critical the way activating an
+            # account-level credential or paid instrument is.
+            activation_context = co_occurs_with(
+                text, "activat*",
+                ["card", "account", "subscription", "service", "license", "membership"]
+            )
+            if activation_context:
+                hit_count += 1
 
         elif kri == "complexity":
             # Baseline term, same status as compliance's: a
