@@ -479,7 +479,20 @@ KRI_DEFINITIONS = {
             # "any UI action with a number attached."
             "pre-paid card", "payment card", "credit card", "debit card",
             "payment transaction", "financial transaction",
-            "process a payment", "complete a transaction", "checkout"
+            "process a payment", "complete a transaction", "checkout",
+            # Round: scheduling/resource-contention latency (H1's "empty
+            # time slots"). Same underlying justification already used
+            # for H1's existing prototype (added, reverted once, re-added
+            # per explicit request): correctly handling concurrent claims
+            # on a shared, limited slot requires real-time consistency --
+            # a genuine time-behaviour/concurrency-control concern, not
+            # merely "any scheduling-domain noun." Same cue already added
+            # to complexity's vocabulary (round 8, scheduling/resource-
+            # allocation domain) for the identical underlying reasoning,
+            # extended here to performance's own cue list since the
+            # existing H1 prototype names this concept but no lexical cue
+            # backed it yet.
+            "time slot*"
         ],
         "prototypes": [
             "the requirement specifies response time or system performance",
