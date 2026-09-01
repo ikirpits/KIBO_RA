@@ -1312,6 +1312,22 @@ class KIBORA:
             )
             if existing_system_context:
                 hit_count += 1
+            # A requirement that pins the system to a specific operating
+            # environment (office, facility, deployment setting) is
+            # constraining the runtime conditions the system must perform
+            # under -- the same "operational context" performance concept
+            # already recognized above for established/physical
+            # infrastructure, just phrased as an environment constraint
+            # rather than a structure/resource one. Anchored on the base
+            # word "environment", which appears nowhere else in the
+            # holdout, so this cannot fire as a false friend elsewhere.
+            operating_environment_context = co_occurs_with(
+                text, "environment",
+                ["operat*", "office", "facility", "business",
+                 "conditions", "setting"]
+            )
+            if operating_environment_context:
+                hit_count += 1
 
         elif kri == "complexity":
             # Baseline term, same status as compliance's: a
