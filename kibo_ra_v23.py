@@ -1298,6 +1298,20 @@ class KIBORA:
             )
             if physical_infra_context:
                 hit_count += 1
+            # "established" alone is too broad (established procedures,
+            # established relationships, etc. carry no performance meaning),
+            # but paired with a system/structure noun it signals operating
+            # within a pre-existing system whose performance characteristics
+            # are inherited/constrained -- a distinct ISO-25010-adjacent
+            # concept from the network (web service) and resource
+            # (physical infrastructure) signals above.
+            existing_system_context = co_occurs_with(
+                text, "established",
+                ["process", "system", "structure", "infrastructure",
+                 "platform", "architecture"]
+            )
+            if existing_system_context:
+                hit_count += 1
 
         elif kri == "complexity":
             # Baseline term, same status as compliance's: a
