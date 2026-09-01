@@ -550,14 +550,7 @@ KRI_DEFINITIONS = {
             # closes most of H4's gap (0.481->0.639 predicted) but not all
             # of it (needs 0.69) -- this is the residual attempt, same
             # ripple risk as every other own-KRI prototype this round.
-            "the requirement specifies a payment or financial transaction that must complete quickly, since transaction latency directly affects checkout completion, revenue, or user trust",
-            # Round: physical infrastructure/hardware dependency, paired
-            # with the co-occurrence cue added this round for H10 ("the
-            # established physical web service structure"). Gap analysis
-            # showed the lexical fix alone gets to ~0.52 (needs 0.54, a
-            # ~0.016 residual) -- this targets that residual, same ripple
-            # risk as every other own-KRI prototype this session.
-            "the requirement specifies constraints related to the physical infrastructure or hardware the system depends on, which limits the performance the system can achieve"
+            "the requirement specifies a payment or financial transaction that must complete quickly, since transaction latency directly affects checkout completion, revenue, or user trust"
         ]
     },
     "security": {
