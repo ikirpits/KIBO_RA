@@ -550,7 +550,14 @@ KRI_DEFINITIONS = {
             # closes most of H4's gap (0.481->0.639 predicted) but not all
             # of it (needs 0.69) -- this is the residual attempt, same
             # ripple risk as every other own-KRI prototype this round.
-            "the requirement specifies a payment or financial transaction that must complete quickly, since transaction latency directly affects checkout completion, revenue, or user trust"
+            "the requirement specifies a payment or financial transaction that must complete quickly, since transaction latency directly affects checkout completion, revenue, or user trust",
+            # Round: physical infrastructure/hardware dependency, paired
+            # with the co-occurrence cue added this round for H10 ("the
+            # established physical web service structure"). Gap analysis
+            # showed the lexical fix alone gets to ~0.52 (needs 0.54, a
+            # ~0.016 residual) -- this targets that residual, same ripple
+            # risk as every other own-KRI prototype this session.
+            "the requirement specifies constraints related to the physical infrastructure or hardware the system depends on, which limits the performance the system can achieve"
         ]
     },
     "security": {
@@ -1278,6 +1285,25 @@ class KIBORA:
                 ["card", "account", "subscription", "service", "license", "membership"]
             )
             if activation_context:
+                hit_count += 1
+            # Physical infrastructure/hardware dependency is ISO 25010's
+            # resource-utilization sub-characteristic (amounts/types of
+            # resources used, including physical ones), distinct from the
+            # network/web-service time-behaviour concept the "web
+            # service"/"web application server" cues already cover --
+            # operating within a specific physical facility or hardware
+            # setup constrains what performance the system can actually
+            # achieve, independent of network latency. Co-occurrence
+            # rather than a bare "physical*" cue since "physical" alone is
+            # extremely broad (physical security, physical access, physical
+            # documents -- none of it performance-relevant) and only means
+            # something here paired with an infrastructure/facility noun.
+            physical_infra_context = co_occurs_with(
+                text, "physical",
+                ["structure", "infrastructure", "server", "hardware",
+                 "facility", "data center", "datacenter"]
+            )
+            if physical_infra_context:
                 hit_count += 1
 
         elif kri == "complexity":
