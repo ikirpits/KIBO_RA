@@ -435,7 +435,7 @@ KRI_DEFINITIONS = {
             # just stated as an architectural fact rather than a user
             # population fact.
             "web application server", "application server", "web server",
-            "web service",
+            "web service", "website",
             # Round: broader ISO 25010 / SRE-practice vocabulary sweep for
             # generalizability beyond this holdout -- none of these fire
             # on any of the 21 items here (checked before adding), so this
