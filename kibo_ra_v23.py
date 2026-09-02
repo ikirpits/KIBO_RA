@@ -13,6 +13,8 @@ Design principles
 2. Scores are derived from observable linguistic/semantic evidence.
 3. Governance thresholds are policy decisions, not score-generation targets.
 4. Semantic evidence and linguistic evidence are combined transparently.
+   Semantic evidence is itself a disclosed SBERT + BERT4RE hybrid
+   concatenation, not a single model (see SemanticEngine).
 5. Every KRI score has an evidence trace.
 
 Five KRIs
@@ -53,10 +55,11 @@ import pandas as pd
 
 try:
     import torch
-    from sentence_transformers import SentenceTransformer, util
+    from sentence_transformers import SentenceTransformer, models, util
 except Exception:
     torch = None
     SentenceTransformer = None
+    models = None
     util = None
 
 
@@ -77,6 +80,9 @@ DEFAULT_CONFIG = {
     "semantic": {
         "enabled": True,
         "model": "all-mpnet-base-v2",
+        "bert4re_model": "thearod5/bert4re",
+        "bert4re_enabled": True,
+        "hybrid_weights": {"sbert": 0.50, "bert4re": 0.50},
         "semantic_weight": 0.50,
         "lexical_weight": 0.50
     },
@@ -1142,27 +1148,124 @@ def saturated(value: float, scale: float = 2.5) -> float:
 # ---------------------------------------------------------------------------
 
 class SemanticEngine:
+    """Semantic evidence from a hybrid embedding: SBERT (general-purpose
+    sentence semantics) concatenated with BERT4RE -- BERT retrained on
+    requirements-engineering text specifically (thearod5/bert4re; see
+    Alhoshan et al., "Retraining a BERT Model for Transfer Learning in
+    Requirements Engineering", RE'22) -- so similarity to the KRI
+    prototypes reflects both general sentence semantics and RE-domain
+    semantics, not either alone.
+
+    BERT4RE is a plain retrained BERT-base checkpoint, not a
+    sentence-transformers model in its own right, so it is wrapped with a
+    mean-pooling head (sentence_transformers.models.Transformer +
+    models.Pooling) -- the library's own documented way to turn any
+    HuggingFace encoder into a sentence encoder -- rather than read off its
+    [CLS] token, which was never trained for sentence-level similarity.
+
+    Each encoder's own output is L2-unit-normalized, then scaled by
+    sqrt(its configured weight) before concatenation. Because both
+    sub-vectors are unit-norm and the two weights are renormalized to sum
+    to 1, the concatenated hybrid vector is ALSO unit-norm, which makes the
+    cosine similarity between two hybrid vectors EXACTLY
+        hybrid_weights.sbert * cos_sim(sbert_a, sbert_b)
+        + hybrid_weights.bert4re * cos_sim(bert4re_a, bert4re_b)
+    i.e. true embedding-level concatenation whose emergent behavior is a
+    transparent, disclosed weighted blend of the two models' own similarity
+    judgments (see governance_config's semantic.hybrid_weights), not an
+    opaque black-box fusion.
+
+    Either encoder can independently fail to load (not installed, no
+    network, individually disabled in config) without the other becoming
+    unusable -- the hybrid vector then degrades to whichever encoder(s)
+    loaded, preserving pre-hybrid single-SBERT behavior rather than failing
+    closed. Only if NEITHER loads does score() return 0.0 and evidence
+    fall back to lexical-only, exactly as before this class had a second
+    encoder at all.
+    """
+
     def __init__(self):
-        self.enabled = bool(CONFIG.get("semantic", {}).get("enabled", True))
-        self.model_name = CONFIG.get("semantic", {}).get("model", "all-mpnet-base-v2")
-        self.model = None
+        semantic_cfg = CONFIG.get("semantic", {})
+        self.enabled = bool(semantic_cfg.get("enabled", True))
+        self.sbert_model_name = semantic_cfg.get("model", "all-mpnet-base-v2")
+        self.bert4re_enabled = bool(semantic_cfg.get("bert4re_enabled", True))
+        self.bert4re_model_name = semantic_cfg.get("bert4re_model", "thearod5/bert4re")
+
+        raw_weights = semantic_cfg.get("hybrid_weights", {})
+        w_sbert = float(raw_weights.get("sbert", 0.5))
+        w_bert4re = float(raw_weights.get("bert4re", 0.5))
+        total = w_sbert + w_bert4re
+        # Renormalized so the two weights always sum to 1 regardless of what
+        # is in the config file -- required for the unit-norm hybrid-vector
+        # property described in the class docstring to hold exactly.
+        self.sbert_weight = w_sbert / total if total > 0 else 0.5
+        self.bert4re_weight = w_bert4re / total if total > 0 else 0.5
+
         self.prototype_embeddings = {}
         self.rest_embeddings = {}
 
+        device = "cuda" if torch is not None and torch.cuda.is_available() else "cpu"
+
+        self.sbert = None
         if self.enabled and SentenceTransformer is not None:
             try:
-                device = "cuda" if torch is not None and torch.cuda.is_available() else "cpu"
-                self.model = SentenceTransformer(self.model_name, device=device)
+                self.sbert = SentenceTransformer(self.sbert_model_name, device=device)
             except Exception:
-                self.model = None
+                self.sbert = None
+
+        self.bert4re = None
+        if (
+            self.enabled and self.bert4re_enabled
+            and SentenceTransformer is not None and models is not None
+        ):
+            try:
+                transformer = models.Transformer(self.bert4re_model_name)
+                pooling = models.Pooling(
+                    transformer.get_word_embedding_dimension(), pooling_mode="mean"
+                )
+                self.bert4re = SentenceTransformer(modules=[transformer, pooling], device=device)
+            except Exception:
+                self.bert4re = None
+
+    @property
+    def active_encoders(self) -> List[str]:
+        names = []
+        if self.sbert is not None:
+            names.append("sbert")
+        if self.bert4re is not None:
+            names.append("bert4re")
+        return names
+
+    @property
+    def available(self) -> bool:
+        return bool(self.active_encoders)
 
     def encode(self, texts):
-        if self.model is None:
+        """Hybrid embedding across whichever encoder(s) loaded -- see the
+        class docstring for the weighting/concatenation scheme."""
+        sbert_vecs = (
+            self.sbert.encode(texts, convert_to_tensor=True, normalize_embeddings=True)
+            if self.sbert is not None else None
+        )
+        bert4re_vecs = (
+            self.bert4re.encode(texts, convert_to_tensor=True, normalize_embeddings=True)
+            if self.bert4re is not None else None
+        )
+
+        if sbert_vecs is None and bert4re_vecs is None:
             return None
-        return self.model.encode(texts, convert_to_tensor=True, normalize_embeddings=True)
+        if sbert_vecs is not None and bert4re_vecs is not None:
+            return torch.cat(
+                [
+                    math.sqrt(self.sbert_weight) * sbert_vecs,
+                    math.sqrt(self.bert4re_weight) * bert4re_vecs
+                ],
+                dim=1
+            )
+        return sbert_vecs if sbert_vecs is not None else bert4re_vecs
 
     def prepare(self):
-        if self.model is None:
+        if not self.available:
             return
         for kri, definition in KRI_DEFINITIONS.items():
             self.prototype_embeddings[kri] = self.encode(definition["prototypes"])
@@ -1177,7 +1280,7 @@ class SemanticEngine:
             self.rest_embeddings[kri] = torch.cat(others, dim=0)
 
     def score(self, text: str, kri: str) -> float:
-        if self.model is None:
+        if not self.available:
             return 0.0
 
         if kri not in self.prototype_embeddings:
@@ -1206,7 +1309,7 @@ class SemanticEngine:
 class KIBORA:
     def __init__(self):
         self.semantic = SemanticEngine()
-        if self.semantic.model is not None:
+        if self.semantic.available:
             self.semantic.prepare()
 
     def lexical_score(self, text: str, kri: str) -> Tuple[float, Dict]:
@@ -1542,7 +1645,7 @@ class KIBORA:
             lexical, ev = self.lexical_score(text, kri)
             semantic = self.semantic.score(text, kri)
 
-            if self.semantic.model is None:
+            if not self.semantic.available:
                 score = lexical
                 agreement = 1.0
             else:
@@ -1557,7 +1660,8 @@ class KIBORA:
             evidence[kri] = {
                 **ev,
                 "semantic_score": round(float(semantic), 6),
-                "semantic_lexical_agreement": round(float(agreement), 6)
+                "semantic_lexical_agreement": round(float(agreement), 6),
+                "semantic_encoders_active": self.semantic.active_encoders
             }
 
         # Overall reflects the final (calibrated) scores, since that's the
@@ -1574,7 +1678,7 @@ class KIBORA:
 
         # Confidence reflects evidence availability and agreement, not similarity
         # to expert labels.
-        semantic_available = float(self.semantic.model is not None)
+        semantic_available = float(self.semantic.available)
         evidence_density = float(np.mean([
             min(1.0, len(evidence[k]["lexical_hits"]) / 3.0)
             for k in KRI_ORDER

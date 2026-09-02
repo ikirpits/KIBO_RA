@@ -1,6 +1,6 @@
 {
-  "version": "2.1",
-  "description": "KIBO-RA v2 policy and mathematical configuration. Evidence extraction (lexical + semantic scoring) never uses expert labels. The 'calibration' section below is a separate, optional, disclosed post-hoc rescale, identity until fit_calibration() is run explicitly against a named calibration set.",
+  "version": "2.2",
+  "description": "KIBO-RA v2 policy and mathematical configuration. Evidence extraction (lexical + semantic scoring, where semantic scoring is a hybrid concatenation of SBERT and BERT4RE embeddings) never uses expert labels. The 'calibration' section below is a separate, optional, disclosed post-hoc rescale, identity until fit_calibration() is run explicitly against a named calibration set.",
   "risk_thresholds": {
     "low": 0.4,
     "medium": 0.7
@@ -13,6 +13,12 @@
   "semantic": {
     "enabled": true,
     "model": "all-mpnet-base-v2",
+    "bert4re_model": "thearod5/bert4re",
+    "bert4re_enabled": true,
+    "hybrid_weights": {
+      "sbert": 0.5,
+      "bert4re": 0.5
+    },
     "semantic_weight": 0.5,
     "lexical_weight": 0.5
   },
