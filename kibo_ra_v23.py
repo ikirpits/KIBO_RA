@@ -1229,11 +1229,34 @@ class KIBORA:
             # ("capable of supporting N", "a maximum of N") -- the same
             # ISO 25010 capacity claim, just not stated as a population-
             # plurality fact. See _PERFORMANCE_CAPACITY_PHRASES.
+            # A third phrasing of the identical claim: naming the
+            # concurrency/capacity-handling MECHANISM itself (multi-
+            # threading, load balancing -- ISO 25010 capacity and resource-
+            # utilization sub-characteristics are literally about how a
+            # system distributes work across concurrent execution units)
+            # alongside a demand/scale indicator (traffic, load spikes,
+            # data load) is the same capacity claim as "supports N
+            # concurrent users" or "capable of supporting N", just stated
+            # as the implementation approach rather than a population count
+            # or a bare capacity-limit phrase. Requires both halves --
+            # "multi-threading" or "load balancing" alone (without a scale
+            # indicator) already earns full hit-count credit via their own
+            # lexical cues and isn't further credited here.
+            capacity_mechanism_context = (
+                phrase_present(text, "multi-thread*")
+                or phrase_present(text, "multithread*")
+                or phrase_present(text, "load balanc*")
+            ) and (
+                phrase_present(text, "traffic")
+                or phrase_present(text, "data load")
+                or phrase_present(text, "load spike*")
+                or phrase_present(text, "high traffic")
+            )
             concurrent_user_context = co_occurs_with(
                 text, "user*", ["multiple", "concurrent", "simultaneous", "many"]
             ) or any(
                 phrase_present(text, cue) for cue in _PERFORMANCE_CAPACITY_PHRASES
-            )
+            ) or capacity_mechanism_context
             # No obligation floor here (unlike complexity/compliance/
             # ambiguity below): on this file's own
             # holdout set every item is phrased as a formal "shall/must/
@@ -1327,6 +1350,26 @@ class KIBORA:
                  "conditions", "setting"]
             )
             if operating_environment_context:
+                hit_count += 1
+            # Message throughput/latency is its own established ISO 25010
+            # time-behaviour sub-domain (queueing/messaging-middleware SLAs
+            # are conventionally stated as message latency or message
+            # throughput), distinct from the bare "processing time" cue
+            # above: that cue only credits the text for naming *a* duration
+            # metric, not for the specific fact that what's being processed
+            # is a message stream -- a genuinely separate piece of content a
+            # plain cue-word match can't see, the same reasoning already
+            # used for the statistical-population-target compound pattern
+            # above. Co-occurrence (a message-referring noun with a verb of
+            # handling/moving it) rather than a bare "message*" cue, since
+            # "message" alone is topic-neutral (error message, confirmation
+            # message) and not inherently performance content.
+            message_processing_context = co_occurs_with(
+                text, "message*",
+                ["process*", "queue*", "throughput", "deliver*",
+                 "transmit*", "receive*"]
+            )
+            if message_processing_context:
                 hit_count += 1
 
         elif kri == "complexity":
