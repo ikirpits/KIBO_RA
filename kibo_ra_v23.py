@@ -299,6 +299,33 @@ _PERFORMANCE_CAPACITY_PHRASES = [
 ]
 
 
+# Bass/Clements/Kazman's named scalability tactics for handling load
+# (introduce concurrency, load balancing, increase resources, bound queue
+# sizes/shed load) -- reused here, together, as the trigger for
+# scalability_mechanism_context below rather than left as isolated lexical
+# hits. Most of these already appear as standalone cues in this KRI's list
+# (multi-thread*, horizontal/vertical scal*, caching, connection pool*,
+# circuit breaker, backpressure, load shedding); "load balanc*" itself was
+# a gap despite being the most textbook-canonical tactic of the set, so
+# it's added to the main cues list below as well as here.
+_PERFORMANCE_SCALABILITY_MECHANISM_CUES = [
+    "load balanc*", "multi-thread*", "multithread*",
+    "horizontal scal*", "vertical scal*", "caching", "cache",
+    "connection pool*", "circuit breaker", "backpressure", "load shedding"
+]
+
+# The load/traffic-handling PURPOSE a mechanism above is named for -- gates
+# scalability_mechanism_context to requirements that tie the mechanism to
+# an actual load-handling goal, rather than firing on a bare mention of the
+# mechanism word in some unrelated sentence (the same narrowing rationale
+# already used for physical_infra_context/existing_system_context/
+# operating_environment_context's co-occurrence gates below).
+_PERFORMANCE_LOAD_HANDLING_QUALIFIERS = [
+    "traffic", "load spike*", "data load", "surge*", "peak load",
+    "high demand", "high volume", "heavy load"
+]
+
+
 # "Only <actor> can/may/shall <verb>", and its passive-voice mirror
 # "<verb> can/may/shall only be <done> by <actor>", are the canonical
 # natural-language phrasing of an authorization/access-restriction
@@ -498,7 +525,24 @@ KRI_DEFINITIONS = {
             # extended here to performance's own cue list since the
             # existing H1 prototype names this concept but no lexical cue
             # backed it yet.
-            "time slot*"
+            "time slot*",
+            # Round: "maximum"/"load balanc*" -- IEEE 830 and ISO 25010 both
+            # call for time-behaviour requirements to state an explicit
+            # maximum (or minimum) bound, so "maximum" is core NFR-bound
+            # vocabulary on the same footing as the already-present
+            # "uptime"/"throughput"/"latency" bare cues, not just a
+            # component of the "maximum of"/"support a maximum" capacity
+            # phrases already in _PERFORMANCE_CAPACITY_PHRASES (which are
+            # specifically about population/instance counts, not the more
+            # general bound concept). "load balanc*" is one of
+            # Bass/Clements/Kazman's canonical scalability tactics --
+            # already implied by the "load*" stem and by
+            # COMPLEXITY_DOMAINS' distributed_scale list, but never itself
+            # a standalone performance cue despite being more textbook than
+            # several tactics (circuit breaker, load shedding) that already
+            # are. See _PERFORMANCE_SCALABILITY_MECHANISM_CUES above for
+            # where "load balanc*" also feeds a dedicated structural signal.
+            "maximum", "load balanc*"
         ],
         "prototypes": [
             "the requirement specifies response time or system performance",
@@ -1337,6 +1381,25 @@ class KIBORA:
             ) or any(
                 phrase_present(text, cue) for cue in _PERFORMANCE_CAPACITY_PHRASES
             )
+            # A requirement can name a concrete scalability/load-handling
+            # MECHANISM (load balancing, multi-threading, horizontal
+            # scaling, caching, ...) without ever stating a number -- the
+            # same "concrete-but-non-numeric" status concurrent_user_context
+            # already has above. Bass/Clements/Kazman name these as the
+            # standard tactics for handling load, so naming one in service
+            # of an actual load/traffic-handling goal is substantive
+            # performance-architecture content on its own, not merely an
+            # abstract quality adjective like "fast" or "scalable". Gated
+            # on a load-handling qualifier (not a bare mechanism mention)
+            # for the same narrowing reason physical_infra_context etc.
+            # below use co-occurrence rather than a bare cue.
+            scalability_mechanism_context = any(
+                phrase_present(text, cue)
+                for cue in _PERFORMANCE_SCALABILITY_MECHANISM_CUES
+            ) and any(
+                phrase_present(text, qualifier)
+                for qualifier in _PERFORMANCE_LOAD_HANDLING_QUALIFIERS
+            )
             # No obligation floor here (unlike complexity/compliance/
             # ambiguity below): on this file's own
             # holdout set every item is phrased as a formal "shall/must/
@@ -1346,10 +1409,11 @@ class KIBORA:
             # rate against it would be functionally close to hand-fitting a
             # calibration intercept rather than genuine per-item evidence.
             # A performance floor was tried and reverted for exactly this
-            # reason; the two signals below vary genuinely per item.
+            # reason; the signals below vary genuinely per item.
             structural = (
                 0.55 * (1.0 if has_quantified_performance_target(text) else 0.0) +
                 0.20 * (1.0 if concurrent_user_context else 0.0) +
+                0.20 * (1.0 if scalability_mechanism_context else 0.0) +
                 0.25 * features["length_ratio"]
             )
             # A statistical acceptance criterion ("70% of registered
