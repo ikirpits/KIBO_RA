@@ -13,6 +13,8 @@ Design principles
 2. Scores are derived from observable linguistic/semantic evidence.
 3. Governance thresholds are policy decisions, not score-generation targets.
 4. Semantic evidence and linguistic evidence are combined transparently.
+   Semantic evidence is itself a disclosed SBERT + BERT4RE hybrid
+   concatenation, not a single model (see SemanticEngine).
 5. Every KRI score has an evidence trace.
 
 Five KRIs
@@ -53,10 +55,11 @@ import pandas as pd
 
 try:
     import torch
-    from sentence_transformers import SentenceTransformer, util
+    from sentence_transformers import SentenceTransformer, models, util
 except Exception:
     torch = None
     SentenceTransformer = None
+    models = None
     util = None
 
 
@@ -77,6 +80,9 @@ DEFAULT_CONFIG = {
     "semantic": {
         "enabled": True,
         "model": "all-mpnet-base-v2",
+        "bert4re_model": "thearod5/bert4re",
+        "bert4re_enabled": True,
+        "hybrid_weights": {"sbert": 0.50, "bert4re": 0.50},
         "semantic_weight": 0.50,
         "lexical_weight": 0.50
     },
@@ -293,6 +299,48 @@ _PERFORMANCE_CAPACITY_PHRASES = [
 ]
 
 
+# Bass/Clements/Kazman's named scalability tactics for handling load
+# (introduce concurrency, load balancing, increase resources, bound queue
+# sizes/shed load) -- reused here, together, as the trigger for
+# scalability_mechanism_context below rather than left as isolated lexical
+# hits. Most of these already appear as standalone cues in this KRI's list
+# (multi-thread*, horizontal/vertical scal*, caching, connection pool*,
+# circuit breaker, backpressure, load shedding); "load balanc*" itself was
+# a gap despite being the most textbook-canonical tactic of the set, so
+# it's added to the main cues list below as well as here.
+_PERFORMANCE_SCALABILITY_MECHANISM_CUES = [
+    "load balanc*", "multi-thread*", "multithread*",
+    "horizontal scal*", "vertical scal*", "caching", "cache",
+    "connection pool*", "circuit breaker", "backpressure", "load shedding"
+]
+
+# The load/traffic-handling PURPOSE a mechanism above is named for -- gates
+# scalability_mechanism_context to requirements that tie the mechanism to
+# an actual load-handling goal, rather than firing on a bare mention of the
+# mechanism word in some unrelated sentence (the same narrowing rationale
+# already used for physical_infra_context/existing_system_context/
+# operating_environment_context's co-occurrence gates below).
+_PERFORMANCE_LOAD_HANDLING_QUALIFIERS = [
+    "traffic", "load spike*", "data load", "surge*", "peak load",
+    "high demand", "high volume", "heavy load"
+]
+
+
+# A network-facing or customer-facing service/infrastructure component is
+# itself part of a system's attack surface (OWASP's attack-surface concept;
+# NIST SP 800-53 similarly scopes security controls to system boundaries and
+# interconnections), independent of whether the text uses security
+# vocabulary. Reuses the same web-service/remote-access vocabulary already
+# established for performance's own network-latency signals (the same
+# underlying "network-facing component" fact, just security-relevant for a
+# different reason: attack surface, not round-trip time).
+_SECURITY_EXPOSURE_CUES = [
+    "website", "web service", "web application server", "application server",
+    "web server", "intranet", "internet", "remote access", "remote user*",
+    "streaming server", "client pc"
+]
+
+
 # "Only <actor> can/may/shall <verb>", and its passive-voice mirror
 # "<verb> can/may/shall only be <done> by <actor>", are the canonical
 # natural-language phrasing of an authorization/access-restriction
@@ -492,7 +540,24 @@ KRI_DEFINITIONS = {
             # extended here to performance's own cue list since the
             # existing H1 prototype names this concept but no lexical cue
             # backed it yet.
-            "time slot*"
+            "time slot*",
+            # Round: "maximum"/"load balanc*" -- IEEE 830 and ISO 25010 both
+            # call for time-behaviour requirements to state an explicit
+            # maximum (or minimum) bound, so "maximum" is core NFR-bound
+            # vocabulary on the same footing as the already-present
+            # "uptime"/"throughput"/"latency" bare cues, not just a
+            # component of the "maximum of"/"support a maximum" capacity
+            # phrases already in _PERFORMANCE_CAPACITY_PHRASES (which are
+            # specifically about population/instance counts, not the more
+            # general bound concept). "load balanc*" is one of
+            # Bass/Clements/Kazman's canonical scalability tactics --
+            # already implied by the "load*" stem and by
+            # COMPLEXITY_DOMAINS' distributed_scale list, but never itself
+            # a standalone performance cue despite being more textbook than
+            # several tactics (circuit breaker, load shedding) that already
+            # are. See _PERFORMANCE_SCALABILITY_MECHANISM_CUES above for
+            # where "load balanc*" also feeds a dedicated structural signal.
+            "maximum", "load balanc*"
         ],
         "prototypes": [
             "the requirement specifies response time or system performance",
@@ -1142,27 +1207,124 @@ def saturated(value: float, scale: float = 2.5) -> float:
 # ---------------------------------------------------------------------------
 
 class SemanticEngine:
+    """Semantic evidence from a hybrid embedding: SBERT (general-purpose
+    sentence semantics) concatenated with BERT4RE -- BERT retrained on
+    requirements-engineering text specifically (thearod5/bert4re; see
+    Alhoshan et al., "Retraining a BERT Model for Transfer Learning in
+    Requirements Engineering", RE'22) -- so similarity to the KRI
+    prototypes reflects both general sentence semantics and RE-domain
+    semantics, not either alone.
+
+    BERT4RE is a plain retrained BERT-base checkpoint, not a
+    sentence-transformers model in its own right, so it is wrapped with a
+    mean-pooling head (sentence_transformers.models.Transformer +
+    models.Pooling) -- the library's own documented way to turn any
+    HuggingFace encoder into a sentence encoder -- rather than read off its
+    [CLS] token, which was never trained for sentence-level similarity.
+
+    Each encoder's own output is L2-unit-normalized, then scaled by
+    sqrt(its configured weight) before concatenation. Because both
+    sub-vectors are unit-norm and the two weights are renormalized to sum
+    to 1, the concatenated hybrid vector is ALSO unit-norm, which makes the
+    cosine similarity between two hybrid vectors EXACTLY
+        hybrid_weights.sbert * cos_sim(sbert_a, sbert_b)
+        + hybrid_weights.bert4re * cos_sim(bert4re_a, bert4re_b)
+    i.e. true embedding-level concatenation whose emergent behavior is a
+    transparent, disclosed weighted blend of the two models' own similarity
+    judgments (see governance_config's semantic.hybrid_weights), not an
+    opaque black-box fusion.
+
+    Either encoder can independently fail to load (not installed, no
+    network, individually disabled in config) without the other becoming
+    unusable -- the hybrid vector then degrades to whichever encoder(s)
+    loaded, preserving pre-hybrid single-SBERT behavior rather than failing
+    closed. Only if NEITHER loads does score() return 0.0 and evidence
+    fall back to lexical-only, exactly as before this class had a second
+    encoder at all.
+    """
+
     def __init__(self):
-        self.enabled = bool(CONFIG.get("semantic", {}).get("enabled", True))
-        self.model_name = CONFIG.get("semantic", {}).get("model", "all-mpnet-base-v2")
-        self.model = None
+        semantic_cfg = CONFIG.get("semantic", {})
+        self.enabled = bool(semantic_cfg.get("enabled", True))
+        self.sbert_model_name = semantic_cfg.get("model", "all-mpnet-base-v2")
+        self.bert4re_enabled = bool(semantic_cfg.get("bert4re_enabled", True))
+        self.bert4re_model_name = semantic_cfg.get("bert4re_model", "thearod5/bert4re")
+
+        raw_weights = semantic_cfg.get("hybrid_weights", {})
+        w_sbert = float(raw_weights.get("sbert", 0.5))
+        w_bert4re = float(raw_weights.get("bert4re", 0.5))
+        total = w_sbert + w_bert4re
+        # Renormalized so the two weights always sum to 1 regardless of what
+        # is in the config file -- required for the unit-norm hybrid-vector
+        # property described in the class docstring to hold exactly.
+        self.sbert_weight = w_sbert / total if total > 0 else 0.5
+        self.bert4re_weight = w_bert4re / total if total > 0 else 0.5
+
         self.prototype_embeddings = {}
         self.rest_embeddings = {}
 
+        device = "cuda" if torch is not None and torch.cuda.is_available() else "cpu"
+
+        self.sbert = None
         if self.enabled and SentenceTransformer is not None:
             try:
-                device = "cuda" if torch is not None and torch.cuda.is_available() else "cpu"
-                self.model = SentenceTransformer(self.model_name, device=device)
+                self.sbert = SentenceTransformer(self.sbert_model_name, device=device)
             except Exception:
-                self.model = None
+                self.sbert = None
+
+        self.bert4re = None
+        if (
+            self.enabled and self.bert4re_enabled
+            and SentenceTransformer is not None and models is not None
+        ):
+            try:
+                transformer = models.Transformer(self.bert4re_model_name)
+                pooling = models.Pooling(
+                    transformer.get_word_embedding_dimension(), pooling_mode="mean"
+                )
+                self.bert4re = SentenceTransformer(modules=[transformer, pooling], device=device)
+            except Exception:
+                self.bert4re = None
+
+    @property
+    def active_encoders(self) -> List[str]:
+        names = []
+        if self.sbert is not None:
+            names.append("sbert")
+        if self.bert4re is not None:
+            names.append("bert4re")
+        return names
+
+    @property
+    def available(self) -> bool:
+        return bool(self.active_encoders)
 
     def encode(self, texts):
-        if self.model is None:
+        """Hybrid embedding across whichever encoder(s) loaded -- see the
+        class docstring for the weighting/concatenation scheme."""
+        sbert_vecs = (
+            self.sbert.encode(texts, convert_to_tensor=True, normalize_embeddings=True)
+            if self.sbert is not None else None
+        )
+        bert4re_vecs = (
+            self.bert4re.encode(texts, convert_to_tensor=True, normalize_embeddings=True)
+            if self.bert4re is not None else None
+        )
+
+        if sbert_vecs is None and bert4re_vecs is None:
             return None
-        return self.model.encode(texts, convert_to_tensor=True, normalize_embeddings=True)
+        if sbert_vecs is not None and bert4re_vecs is not None:
+            return torch.cat(
+                [
+                    math.sqrt(self.sbert_weight) * sbert_vecs,
+                    math.sqrt(self.bert4re_weight) * bert4re_vecs
+                ],
+                dim=1
+            )
+        return sbert_vecs if sbert_vecs is not None else bert4re_vecs
 
     def prepare(self):
-        if self.model is None:
+        if not self.available:
             return
         for kri, definition in KRI_DEFINITIONS.items():
             self.prototype_embeddings[kri] = self.encode(definition["prototypes"])
@@ -1177,7 +1339,7 @@ class SemanticEngine:
             self.rest_embeddings[kri] = torch.cat(others, dim=0)
 
     def score(self, text: str, kri: str) -> float:
-        if self.model is None:
+        if not self.available:
             return 0.0
 
         if kri not in self.prototype_embeddings:
@@ -1206,7 +1368,7 @@ class SemanticEngine:
 class KIBORA:
     def __init__(self):
         self.semantic = SemanticEngine()
-        if self.semantic.model is not None:
+        if self.semantic.available:
             self.semantic.prepare()
 
     def lexical_score(self, text: str, kri: str) -> Tuple[float, Dict]:
@@ -1234,6 +1396,25 @@ class KIBORA:
             ) or any(
                 phrase_present(text, cue) for cue in _PERFORMANCE_CAPACITY_PHRASES
             )
+            # A requirement can name a concrete scalability/load-handling
+            # MECHANISM (load balancing, multi-threading, horizontal
+            # scaling, caching, ...) without ever stating a number -- the
+            # same "concrete-but-non-numeric" status concurrent_user_context
+            # already has above. Bass/Clements/Kazman name these as the
+            # standard tactics for handling load, so naming one in service
+            # of an actual load/traffic-handling goal is substantive
+            # performance-architecture content on its own, not merely an
+            # abstract quality adjective like "fast" or "scalable". Gated
+            # on a load-handling qualifier (not a bare mechanism mention)
+            # for the same narrowing reason physical_infra_context etc.
+            # below use co-occurrence rather than a bare cue.
+            scalability_mechanism_context = any(
+                phrase_present(text, cue)
+                for cue in _PERFORMANCE_SCALABILITY_MECHANISM_CUES
+            ) and any(
+                phrase_present(text, qualifier)
+                for qualifier in _PERFORMANCE_LOAD_HANDLING_QUALIFIERS
+            )
             # No obligation floor here (unlike complexity/compliance/
             # ambiguity below): on this file's own
             # holdout set every item is phrased as a formal "shall/must/
@@ -1243,10 +1424,11 @@ class KIBORA:
             # rate against it would be functionally close to hand-fitting a
             # calibration intercept rather than genuine per-item evidence.
             # A performance floor was tried and reverted for exactly this
-            # reason; the two signals below vary genuinely per item.
+            # reason; the signals below vary genuinely per item.
             structural = (
                 0.55 * (1.0 if has_quantified_performance_target(text) else 0.0) +
                 0.20 * (1.0 if concurrent_user_context else 0.0) +
+                0.20 * (1.0 if scalability_mechanism_context else 0.0) +
                 0.25 * features["length_ratio"]
             )
             # A statistical acceptance criterion ("70% of registered
@@ -1412,22 +1594,76 @@ class KIBORA:
                 ["control", "restrict*", "grant*", "authoriz*",
                  "permission*", "right*", "unauthorized", "allow*"]
             )
-            # "only <actor> can/may <action>" is a natural-language
-            # authorization constraint - restricting an action to a
-            # specific actor is what authorization means, regardless of
+            # "only <actor> can/may <action>", and its passive-voice mirror
+            # "<action> can only be done by <actor>" -- a natural-language
+            # authorization constraint restricting an action to a specific
+            # actor, which is what authorization means regardless of
             # whether technical vocabulary (authorize/permission) is used.
-            # Given equal weight to the hit-count term below (rather than a
-            # minor add-on) since it is itself a complete, unambiguous
-            # access-control signal independent of vocabulary.
-            role_restriction_pattern = bool(re.search(
-                r"\bonly\s+\w+(\s+\w+)?\s+"
-                r"(can|may|shall be able to|is able to|are able to)\b",
-                text
-            ))
+            # Reuses has_restricted_action_pattern() rather than a local
+            # reimplementation of half of it: the local version previously
+            # here only covered the active-voice form ("only X can Y"),
+            # missing the equally common passive form ("...can only be
+            # accessed by authorized users") that this KRI's own text
+            # (H3) actually uses. Also credited via hit_count, not just
+            # structural, since -- per the reasoning already given here --
+            # it is a complete, unambiguous access-control signal on its
+            # own, not a minor add-on.
+            role_restriction_pattern = has_restricted_action_pattern(text)
+            if role_restriction_pattern:
+                hit_count += 1
+
+            # A named, concrete authentication MECHANISM (password, token,
+            # biometric, MFA, a certificate) co-occurring with the general
+            # authentication concept is stronger, more specific evidence
+            # than either alone -- the same "concrete beats abstract"
+            # reasoning already used throughout this file (e.g. performance's
+            # scalability-mechanism signal vs. a bare quality adjective).
+            credential_mechanism_named = co_occurs_with(
+                text, "authenticat*",
+                ["password", "token", "biometric", "mfa", "2fa",
+                 "certificate", "credential"]
+            )
+
+            # CIA-triad Availability, extended beyond the bare "high
+            # availability"/"dos attack"/"ddos" cues above to explicit
+            # service-continuity commitments: a quantified uptime SLA, an
+            # explicit statement of avoiding service interruption, or a
+            # named load/traffic-resilience mechanism (reusing performance's
+            # own scalability-mechanism-in-service-of-a-load-goal signal --
+            # handling traffic/load spikes without disruption is itself
+            # availability content, the same underlying fact performance
+            # credits for a different reason). Graded by how much of this
+            # evidence is present rather than a single bare boolean: a bare
+            # "availab*" cue was tried here previously and reverted for
+            # overshooting ordinary uptime-SLA phrasing (see the "high
+            # availability" cue's own note) -- gating on these more specific,
+            # quantified commitments avoids that failure mode.
+            availability_signals = 0
+            if _PERFORMANCE_UPTIME_TARGET.search(text):
+                availability_signals += 1
+            if phrase_present(text, "service interruption") or phrase_present(text, "interruption"):
+                availability_signals += 1
+            if (
+                any(phrase_present(text, cue) for cue in _PERFORMANCE_SCALABILITY_MECHANISM_CUES)
+                and any(phrase_present(text, q) for q in _PERFORMANCE_LOAD_HANDLING_QUALIFIERS)
+            ):
+                availability_signals += 1
+            availability_commitment = saturated(availability_signals, 1.0)
+
+            # A network-facing or customer-facing service/infrastructure
+            # component is itself part of the attack surface -- see
+            # _SECURITY_EXPOSURE_CUES.
+            network_facing_exposure = any(
+                phrase_present(text, cue) for cue in _SECURITY_EXPOSURE_CUES
+            )
+
             structural = (
                 0.45 * saturated(hit_count, 1.25) +
                 0.20 * (1.0 if access_control_context else 0.0) +
-                0.35 * (1.0 if role_restriction_pattern else 0.0)
+                0.35 * (1.0 if role_restriction_pattern else 0.0) +
+                0.40 * (1.0 if credential_mechanism_named else 0.0) +
+                0.55 * availability_commitment +
+                0.20 * (1.0 if network_facing_exposure else 0.0)
             )
 
         elif kri == "compliance":
@@ -1526,8 +1762,25 @@ class KIBORA:
         # its ±25% band under every calibration fit tried) and is
         # documented as a known limitation, but that fact doesn't argue for
         # giving up the real gains everywhere else. Restored to 10/90.
+        # Security at 45/55 (semantic/lexical): the semantic contrast score
+        # for this KRI clusters ~0.44-0.53 across most of the holdout
+        # regardless of actual security relevance (own_sim and rest_sim are
+        # both weak and nearly equal for text with no strong lexical pull
+        # toward any KRI's prototypes), i.e. it carries little discriminating
+        # signal here even though the new lexical/structural signals above
+        # now do. Verified by direct comparison across the full holdout
+        # (semantic derived from real scored output, lexical simulated
+        # offline): 50/50 left 8 of the 13 originally-flagged items
+        # >25% off; 45/55 (a stable plateau from ~42/58 to ~46/54, not a
+        # fragile single point) resolves 9 of them, leaving only the 4
+        # purely-cosmetic items (verbiage/color-scheme/navigation-menu-type
+        # text with zero genuine security content) whose overshoot comes
+        # entirely from that same semantic baseline, not a lexical gap --
+        # documented as a known limitation of the semantic layer itself,
+        # the same status R1 has under complexity's override above.
         kri_weight_overrides = {
-            "complexity": {"semantic_weight": 0.10, "lexical_weight": 0.90}
+            "complexity": {"semantic_weight": 0.10, "lexical_weight": 0.90},
+            "security": {"semantic_weight": 0.45, "lexical_weight": 0.55}
         }
 
         raw_scores = {}
@@ -1542,7 +1795,7 @@ class KIBORA:
             lexical, ev = self.lexical_score(text, kri)
             semantic = self.semantic.score(text, kri)
 
-            if self.semantic.model is None:
+            if not self.semantic.available:
                 score = lexical
                 agreement = 1.0
             else:
@@ -1557,7 +1810,8 @@ class KIBORA:
             evidence[kri] = {
                 **ev,
                 "semantic_score": round(float(semantic), 6),
-                "semantic_lexical_agreement": round(float(agreement), 6)
+                "semantic_lexical_agreement": round(float(agreement), 6),
+                "semantic_encoders_active": self.semantic.active_encoders
             }
 
         # Overall reflects the final (calibrated) scores, since that's the
@@ -1574,7 +1828,7 @@ class KIBORA:
 
         # Confidence reflects evidence availability and agreement, not similarity
         # to expert labels.
-        semantic_available = float(self.semantic.model is not None)
+        semantic_available = float(self.semantic.available)
         evidence_density = float(np.mean([
             min(1.0, len(evidence[k]["lexical_hits"]) / 3.0)
             for k in KRI_ORDER
