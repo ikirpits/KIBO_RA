@@ -667,7 +667,17 @@ KRI_DEFINITIONS = {
             # and denial-of-service resistance are the phrasings that
             # specifically signal availability-as-a-security-control
             # rather than availability-as-an-SLA-number.
-            "high availability", "denial of service", "dos attack", "ddos"
+            "high availability", "denial of service", "dos attack", "ddos",
+            # Round: "log in" and "safe*" -- "login" (noun) was already a
+            # cue, but its verb form is two words ("log in"), which the
+            # single-word cue's word-boundary match cannot reach at all
+            # ("log in" contains no substring "login"); the two are the same
+            # authentication action, just different parts of speech.
+            # "safe*" is the same CIA-triad-adjacent concept "secur*"
+            # already covers -- "log in safely" and "log in securely" are
+            # synonyms in ordinary requirements English, not two different
+            # claims -- and was missing despite "secur*" itself being here.
+            "log in", "safe*"
         ],
         "prototypes": [
             "the requirement specifies authentication authorization or access control",
@@ -1461,6 +1471,29 @@ class KIBORA:
             )
             if activation_context:
                 hit_count += 1
+            # Resetting or recovering a credential is the same kind of
+            # time-critical account-lifecycle operation as activation above
+            # (same underlying justification: a real-world latency
+            # expectation on an onboarding/account-recovery journey, not an
+            # arbitrary feature), just the recovery side of the lifecycle
+            # rather than the creation side -- e.g. "reset my password
+            # within 1 minute" has no cue-list vocabulary at all otherwise
+            # (reset/password/minute/regain aren't performance cues), yet is
+            # squarely the same content class activation_context already
+            # credits.
+            credential_operation_context = (
+                co_occurs_with(text, "reset*", ["password", "credential", "account", "pin"])
+                or co_occurs_with(text, "recover*", ["password", "credential", "account", "pin"])
+            )
+            if credential_operation_context:
+                hit_count += 1
+                # Also a direct, modest structural credit (mirroring
+                # concurrent_user_context/scalability_mechanism_context
+                # above): a credential reset/recovery deadline is itself a
+                # concrete, named performance-critical operation, the same
+                # "concrete beats abstract quality adjective" status those
+                # signals already have, not merely a hit-count add-on.
+                structural += 0.15
             # Physical infrastructure/hardware dependency is ISO 25010's
             # resource-utilization sub-characteristic (amounts/types of
             # resources used, including physical ones), distinct from the
@@ -1624,6 +1657,20 @@ class KIBORA:
                  "certificate", "credential"]
             )
 
+            # "Log in securely"/"log in safely" is a complete authentication-
+            # security statement in its own right -- the login action
+            # explicitly modified by a security/safety qualifier -- the same
+            # "syntactic pattern expresses the concept without needing
+            # authenticat*/password vocabulary" status role_restriction_
+            # pattern and access_control_context already have, just for
+            # the login action specifically rather than an authorization
+            # restriction or explicit credential mechanism.
+            secure_login_pattern = (
+                co_occurs_with(text, "log in", ["secur*", "safe*"])
+                or co_occurs_with(text, "login", ["secur*", "safe*"])
+                or co_occurs_with(text, "sign in", ["secur*", "safe*"])
+            )
+
             # CIA-triad Availability, extended beyond the bare "high
             # availability"/"dos attack"/"ddos" cues above to explicit
             # service-continuity commitments: a quantified uptime SLA, an
@@ -1657,13 +1704,39 @@ class KIBORA:
                 phrase_present(text, cue) for cue in _SECURITY_EXPOSURE_CUES
             )
 
+            # Account provisioning/lifecycle management is itself a named
+            # security control (NIST SP 800-53 AC-2 "Account Management"),
+            # independent of whether the text uses access-control vocabulary
+            # -- creating, registering, or onboarding an account is the
+            # first step of the identity lifecycle IA-2/AC-2 govern.
+            account_provisioning_context = co_occurs_with(
+                text, "account",
+                ["register*", "creat*", "sign up", "sign-up", "registration",
+                 "new user", "onboard*"]
+            )
+            # Credential reset/recovery is its own named security control
+            # (NIST SP 800-53 IA-5 "Authenticator Management" explicitly
+            # covers reset/recovery procedures), distinct from
+            # credential_mechanism_named above (which is about naming the
+            # mechanism, not its recovery) -- account-recovery flows are
+            # also a well-documented attack vector in their own right
+            # (OWASP), so a requirement governing one is squarely security
+            # content even without "authenticat*" appearing at all.
+            credential_recovery_context = (
+                co_occurs_with(text, "password", ["reset*", "recover*", "forgot*", "forget"])
+                or co_occurs_with(text, "credential", ["reset*", "recover*", "forgot*", "forget"])
+            )
+
             structural = (
                 0.45 * saturated(hit_count, 1.25) +
                 0.20 * (1.0 if access_control_context else 0.0) +
                 0.35 * (1.0 if role_restriction_pattern else 0.0) +
                 0.40 * (1.0 if credential_mechanism_named else 0.0) +
+                0.30 * (1.0 if secure_login_pattern else 0.0) +
                 0.55 * availability_commitment +
-                0.20 * (1.0 if network_facing_exposure else 0.0)
+                0.20 * (1.0 if network_facing_exposure else 0.0) +
+                0.25 * (1.0 if account_provisioning_context else 0.0) +
+                0.25 * (1.0 if credential_recovery_context else 0.0)
             )
 
         elif kri == "compliance":
