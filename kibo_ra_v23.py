@@ -340,6 +340,23 @@ _SECURITY_EXPOSURE_CUES = [
     "streaming server", "client pc"
 ]
 
+# ISO/IEC 25010 treats Usability as a quality characteristic disjoint from
+# Security -- and the PROMISE NFR dataset's own labeling scheme makes
+# exactly this split explicit, treating "Look & Feel" (LF) and "Security"
+# (SE) as mutually exclusive classes. A requirement scoped entirely to pure
+# UI presentation -- color scheme, fonts, navigation-menu display, wording/
+# terminology consistency, "intuitive"/"self-explanatory" -- is, by that
+# same standard, evidence AGAINST security relevance, not merely neutral
+# toward it. Used only as a last-resort dampener (see
+# pure_usability_content below), gated on no other security signal having
+# fired at all, so it can never override genuine content.
+_USABILITY_EXCLUSIVE_CUES = [
+    "color scheme", "font*", "look and feel", "visual design", "layout",
+    "navigation menu", "site map", "sitemap", "verbiage", "terminology",
+    "standard english", "intuitive", "self explanatory", "self-explanatory",
+    "user friendly", "user-friendly", "aesthetic*"
+]
+
 
 # "Only <actor> can/may/shall <verb>", and its passive-voice mirror
 # "<verb> can/may/shall only be <done> by <actor>", are the canonical
@@ -1751,6 +1768,27 @@ class KIBORA:
                 or co_occurs_with(text, "credential", ["reset*", "recover*", "forgot*", "forget"])
             )
 
+            # Last-resort dampener, not another positive-evidence signal --
+            # see _USABILITY_EXCLUSIVE_CUES. Deliberately gated on every
+            # other signal in this branch being absent, so a requirement
+            # that mentions both UI presentation AND real security content
+            # (e.g. "the login page shall have a consistent color scheme
+            # and require a password") is untouched -- "password" still
+            # scores normally there. This only engages when this KRI's
+            # entire evidence trace would otherwise be silent.
+            pure_usability_content = (
+                hit_count == 0
+                and not access_control_context
+                and not role_restriction_pattern
+                and not credential_mechanism_named
+                and not secure_login_pattern
+                and availability_commitment == 0
+                and not network_facing_exposure
+                and not account_provisioning_context
+                and not credential_recovery_context
+                and any(phrase_present(text, cue) for cue in _USABILITY_EXCLUSIVE_CUES)
+            )
+
             structural = (
                 0.45 * saturated(hit_count, 1.25) +
                 0.20 * (1.0 if access_control_context else 0.0) +
@@ -1760,7 +1798,8 @@ class KIBORA:
                 0.55 * availability_commitment +
                 0.20 * (1.0 if network_facing_exposure else 0.0) +
                 0.25 * (1.0 if account_provisioning_context else 0.0) +
-                0.25 * (1.0 if credential_recovery_context else 0.0)
+                0.25 * (1.0 if credential_recovery_context else 0.0) -
+                0.30 * (1.0 if pure_usability_content else 0.0)
             )
 
         elif kri == "compliance":
@@ -1841,6 +1880,8 @@ class KIBORA:
             evidence["distinct_complexity_domains"] = distinct_domains
         if kri == "ambiguity":
             evidence["generic_scope_verb_hits"] = generic_verb_hits
+        if kri == "security":
+            evidence["pure_usability_dampener_applied"] = pure_usability_content
         return float(lexical), evidence
 
     def assess(self, requirement: str) -> RiskResult:
