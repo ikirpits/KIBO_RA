@@ -755,7 +755,15 @@ KRI_DEFINITIONS = {
             "internal audit", "external audit", "audit finding",
             "corrective action", "non-conformance", "nonconformance",
             "policy document", "standard operating procedure", "sop",
-            "whistleblow*", "conflict of interest", "code of conduct"
+            "whistleblow*", "conflict of interest", "code of conduct",
+            # Round 3: remote access is its own NAMED control family (NIST
+            # SP 800-53 AC-17 Remote Access; PCI-DSS Requirement 8's
+            # remote-access authentication rules) -- enabling it brings a
+            # recognized governance-control domain into scope independent
+            # of whether "compliance"/"regulation" vocabulary is used, the
+            # same reasoning already applied to access_control/encrypt*
+            # above.
+            "remote access", "remote user*"
         ],
         "prototypes": [
             "the requirement is subject to legal regulatory contractual or policy obligations",
@@ -1894,10 +1902,131 @@ class KIBORA:
             # above for why), kept modest rather than tuned to maximize pass
             # rate against the actual values.
             distinct_domains = distinct_complexity_domains(text)
+            # A requirement with a quantified acceptance target or an
+            # explicit "only X can Y" access restriction is not just
+            # performance/security content -- it is also the kind of
+            # concrete, auditable COMMITMENT that COBIT MEA03 (Ensure
+            # Compliance With External Requirements) and ISO/IEC/IEEE
+            # 29148's "verifiable" characteristic both build governance
+            # processes around: there is nothing for an audit or
+            # traceability process to check a bare, unquantified "shall"
+            # statement against, but the moment it acquires a number or an
+            # explicit access restriction it becomes a concrete commitment
+            # a governance reviewer can actually verify conformance
+            # against. Unlike the obligation floor above, this genuinely
+            # varies per item rather than being true for the whole holdout
+            # set. Reuses performance's and security's own per-item
+            # predicates rather than a new, independently-maintained
+            # detector for the same underlying fact.
+            verifiable_commitment = (
+                has_quantified_performance_target(text)
+                or has_restricted_action_pattern(text)
+            )
+            # A named authentication/credential control is itself a
+            # security CONTROL that SOX ITGC, PCI-DSS Requirement 8, and
+            # GDPR Art. 32 each separately name as an audited governance
+            # control, independent of whether compliance vocabulary is
+            # used. Reuses security's own credential/secure-login
+            # predicates for the same reason as verifiable_commitment
+            # above.
+            credential_control = (
+                co_occurs_with(
+                    text, "authenticat*",
+                    ["password", "token", "biometric", "mfa", "2fa",
+                     "certificate", "credential", "username"]
+                )
+                or co_occurs_with(text, "log in", ["secur*", "safe*"])
+                or co_occurs_with(text, "login", ["secur*", "safe*"])
+                or co_occurs_with(text, "sign in", ["secur*", "safe*"])
+            )
+            # An explicit sign-off/approval gate ("will be approved by the
+            # Architecture group", "corrected and approved") is a change-
+            # management governance control in its own right -- SOX ITGC
+            # and ISO 9001 both build their compliance regimes around
+            # exactly this kind of documented approval workflow,
+            # independent of whether "compliance"/"audit" vocabulary is
+            # also used.
+            approval_governance_workflow = (
+                phrase_present(text, "approv*")
+                or phrase_present(text, "sign-off")
+                or phrase_present(text, "sign off")
+            )
+            # An explicit "Rationale:" clause is itself a traceability
+            # artifact -- ISO/IEC/IEEE 29148 requires a documented
+            # justification as part of a requirement's governed record,
+            # not just the requirement text itself.
+            stated_rationale = phrase_present(text, "rationale")
+            # "Consistent (with X)" co-occurring with an already-fired
+            # cue (e.g. "standard*") names an external convention the
+            # requirement must conform to -- the same "must conform to a
+            # named ... standard" concept already in this KRI's own
+            # prototypes above, just expressed as "consistent with" rather
+            # than "complies with". Gated on hit_count > 0 so a bare
+            # internal-consistency statement with no named referent at all
+            # (e.g. "a consistent color scheme and fonts") is not credited
+            # here -- that is a UX concern, not an external-conformance one.
+            named_standard_conformance = (
+                (phrase_present(text, "consistent") or phrase_present(text, "consistency"))
+                and hit_count > 0
+            )
+            # A system operating within a clinical/healthcare department
+            # or context is presumptively subject to HIPAA's regulatory
+            # environment regardless of whether patient data or "HIPAA"
+            # itself is named -- the same reasoning already applied to
+            # "financial data"/"health record*" as data-SENSITIVITY
+            # triggers above, generalized to the operating-environment
+            # context.
+            healthcare_domain_context = any(
+                phrase_present(text, cue)
+                for cue in ["nursing", "health*", "medical", "patient", "clinical", "hospital"]
+            )
+            # Remote access is its own named control family (NIST SP
+            # 800-53 AC-17; PCI-DSS Requirement 8's remote-access
+            # authentication rules), promoted to a structural signal (not
+            # just hit-count credit) for the same reason credential_control
+            # is: a complete, self-standing governance-control fact on its
+            # own.
+            remote_access_context = (
+                phrase_present(text, "remote access") or phrase_present(text, "remote user*")
+            )
+            # UI/presentation-quality content (color scheme, fonts,
+            # navigation, "intuitive", "self-explanatory", verbiage/
+            # terminology consistency) is not compliance-irrelevant -- it
+            # is exactly what WCAG 2.1 and the legal accessibility
+            # obligations built on it (ADA Title III, Section 508) govern,
+            # independent of whether "accessibility"/"WCAG"/"ADA"
+            # vocabulary is used. Reuses security's own usability-cue list
+            # (there, evidence AGAINST security relevance; here, evidence
+            # FOR a different governance obligation -- the same underlying
+            # fact read for two independent reasons, not double-counting
+            # the same claim).
+            accessibility_relevant_presentation = any(
+                phrase_present(text, cue) for cue in _USABILITY_EXCLUSIVE_CUES
+            )
+            # A network- or customer-facing system component (a web
+            # application server, a public website, a streaming service)
+            # sits inside the system-boundary scope that SOC 2's Trust
+            # Services Criteria and PCI-DSS both define their audit scope
+            # around, independent of whether compliance vocabulary is
+            # used. Reuses security's own network-facing-exposure
+            # vocabulary for the same reason accessibility_relevant_
+            # presentation reuses its usability list above.
+            network_facing_scope = any(
+                phrase_present(text, cue) for cue in _SECURITY_EXPOSURE_CUES
+            )
             structural = (
                 0.35 * (1.0 if has_normative_obligation(text) else 0.0) +
                 0.45 * saturated(distinct_domains, 1.5) +
-                0.20 * features["length_ratio"]
+                0.20 * features["length_ratio"] +
+                0.25 * (1.0 if verifiable_commitment else 0.0) +
+                0.20 * (1.0 if credential_control else 0.0) +
+                0.30 * (1.0 if approval_governance_workflow else 0.0) +
+                0.20 * (1.0 if stated_rationale else 0.0) +
+                0.20 * (1.0 if named_standard_conformance else 0.0) +
+                0.20 * (1.0 if healthcare_domain_context else 0.0) +
+                0.15 * (1.0 if remote_access_context else 0.0) +
+                0.25 * (1.0 if accessibility_relevant_presentation else 0.0) +
+                0.25 * (1.0 if network_facing_scope else 0.0)
             )
 
         else:
