@@ -968,7 +968,21 @@ KRI_DEFINITIONS = {
             "at the discretion of", "subject to change", "subject to availability",
             "may vary", "where possible", "to the extent possible",
             "as far as possible", "except as noted", "unless otherwise",
-            "tbc", "to be confirmed"
+            "tbc", "to be confirmed",
+            # Round 3: "normal" alongside the already-listed "normally" --
+            # same vague-relative-qualifier-with-no-stated-baseline family
+            # (Wiegers & Beatty list "normal"/"typical"/"standard" together
+            # as exactly this defect: normal FOR WHOM, compared to WHAT).
+            # Listed as its own literal entry rather than broadening
+            # "normally" to a "normal*" stem, since that stem would also
+            # catch "normalize"/"normalization" -- an unrelated technical
+            # operation, not a vague qualifier. "High availability" is the
+            # same "qualifier premodifying an abstract quality noun with no
+            # stated measure" pattern already covered by "important
+            # events"/"critical data" etc. above, for the quality noun
+            # "availability" specifically (parallel to "fast", already
+            # listed, for response time).
+            "normal", "high availability"
             # Underspecified-scope verbs: a management/oversight action
             # named without stating what it covers or by what criteria it's
             # judged done (ISO/IEC/IEEE 29148's completeness criterion
@@ -1653,13 +1667,74 @@ class KIBORA:
                 (0, []) if has_quantified_performance_target(text)
                 else count_generic_scope_verb_hits(text)
             )
+            # The mirror image of the suppression above: a requirement that
+            # names a load/capacity-handling MECHANISM (load balancing,
+            # multi-threading, caching, ...) or an operational capacity
+            # phrase, but states no quantified target at all, makes exactly
+            # the kind of claim ISO/IEC/IEEE 29148's "verifiable"
+            # characteristic rules out -- there is no way to test whether
+            # the mechanism actually "overcomes" the load it is named for
+            # without a number attached. Reuses performance's own
+            # mechanism/qualifier/capacity-phrase cue lists rather than a
+            # second, independently-maintained copy of the same vocabulary.
+            capacity_or_scalability_claim = (
+                (any(phrase_present(text, cue) for cue in _PERFORMANCE_SCALABILITY_MECHANISM_CUES)
+                 and any(phrase_present(text, q) for q in _PERFORMANCE_LOAD_HANDLING_QUALIFIERS))
+                or any(phrase_present(text, cue) for cue in _PERFORMANCE_CAPACITY_PHRASES)
+            )
+            unverifiable_capacity_claim = (
+                capacity_or_scalability_claim
+                and not has_quantified_performance_target(text)
+            )
+            # A short requirement that names only a generic network/platform
+            # ROLE noun (a web application server, a web service, ...) by
+            # category, with no quantified target and no further
+            # elaboration, is compatible with many non-equivalent concrete
+            # implementations at once -- Kamsties & Berry's core definition
+            # of ambiguity (admits more than one reasonable interpretation),
+            # here via incompleteness rather than a hedge word. Reuses
+            # security's network-facing-exposure vocabulary (the same
+            # generic-role-noun list, read for a different reason:
+            # underspecification, not attack surface). Gated on brevity
+            # (length_ratio < 0.75) so it does not fire on a long,
+            # multi-clause requirement that happens to mention one of these
+            # nouns in passing but is otherwise fully elaborated -- "bare"
+            # means minimally elaborated overall, not merely missing a
+            # number.
+            bare_infrastructure_reference = (
+                any(phrase_present(text, cue) for cue in _SECURITY_EXPOSURE_CUES)
+                and not has_quantified_performance_target(text)
+                and features["length_ratio"] < 0.75
+            )
+            # "Consistent (with X)" / "consistency" names its own comparison
+            # target in the same clause (X = whatever immediately follows,
+            # or the elements being compared to each other) -- a single,
+            # locally-checkable interpretation, unlike the bare relative-
+            # vague adjectives already in this KRI's cues (appropriate,
+            # reasonable, sufficient, adequate, timely) that presuppose an
+            # unstated comparison context. Kamsties & Berry ground vagueness
+            # in an UNSTATED reference class; a self-supplied one is the
+            # opposite case. Last-resort dampener, same gating discipline as
+            # security's pure_usability_content: only when nothing else
+            # already read this text as vague or scope-underspecified, so
+            # it can soften a bare style/conformance statement but never
+            # override genuine hedge-word or open-list content that happens
+            # to also use the word "consistent."
+            self_anchored_consistency = (
+                (phrase_present(text, "consistent") or phrase_present(text, "consistency"))
+                and hit_count == 0
+                and generic_verb_hits == 0
+            )
             structural = (
                 0.15 * (1.0 if has_normative_obligation(text) else 0.0) +
                 0.20 * saturated(features["vague_terms"], 1.5) +
                 0.13 * saturated(features["alternatives"], 1.5) +
                 0.08 * saturated(features["pronouns"], 2.0) +
                 0.09 * saturated(features["modal_terms"], 2.0) +
-                0.35 * saturated(generic_verb_hits, 1.5)
+                0.35 * saturated(generic_verb_hits, 1.5) +
+                0.25 * (1.0 if unverifiable_capacity_claim else 0.0) +
+                0.25 * (1.0 if bare_infrastructure_reference else 0.0) -
+                0.20 * (1.0 if self_anchored_consistency else 0.0)
             )
 
         elif kri == "security":
