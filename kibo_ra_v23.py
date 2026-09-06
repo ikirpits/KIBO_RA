@@ -1583,6 +1583,29 @@ class KIBORA:
             # than folded into an unrelated one.
             if has_statistical_population_target(text):
                 distinct_domains += 1
+            # Registering/creating an account, or logging/signing in, is
+            # itself genuine identity/access-management (IAM) content --
+            # NIST SP 800-53's AC-2 (Account Management) and IA-2
+            # (Identification and Authentication) name exactly this
+            # lifecycle as a governed activity in its own right --
+            # independent of whether the text also uses architecture-domain
+            # vocabulary (role*/permission*/rbac/...) or contains any other
+            # complexity signal at all. Distinct from access_control's
+            # extra_signal above (has_restricted_action_pattern, an
+            # authorization-RESTRICTION pattern): this is about identity/
+            # account LIFECYCLE specifically -- the gap a short agile epic
+            # with no clauses, conditions, domains, or numeric constraints
+            # otherwise falls through entirely.
+            identity_lifecycle_context = (
+                co_occurs_with(
+                    text, "account",
+                    ["register*", "creat*", "sign up", "sign-up",
+                     "registration", "new user", "onboard*"]
+                )
+                or phrase_present(text, "log in")
+                or phrase_present(text, "login")
+                or phrase_present(text, "sign in")
+            )
             structural = (
                 0.25 * (1.0 if has_normative_obligation(text) else 0.0) +
                 0.18 * saturated(features["clauses"], 1.0) +
@@ -1590,7 +1613,8 @@ class KIBORA:
                 0.07 * saturated(features["alternatives"], 0.75) +
                 0.10 * features["length_ratio"] +
                 0.15 * saturated(distinct_domains, 1.0) +
-                0.15 * saturated(features["numeric_constraints"], 0.75)
+                0.15 * saturated(features["numeric_constraints"], 0.75) +
+                0.30 * (1.0 if identity_lifecycle_context else 0.0)
             )
 
         elif kri == "ambiguity":
