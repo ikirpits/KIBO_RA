@@ -1,40 +1,11 @@
 
 """
-KIBO-RA v2 — Requirements Auditor
-==================================
+KIBO-RA v2 - Requirements Auditor
 
-Purpose
--------
-A non-calibrated, requirement-independent requirements risk auditor.
-
-Design principles
------------------
-1. No expert labels, requirement IDs, or evaluation-set values are used.
-2. Scores are derived from observable linguistic/semantic evidence.
-3. Governance thresholds are policy decisions, not score-generation targets.
-4. Semantic evidence and linguistic evidence are combined transparently.
-   Semantic evidence is itself a disclosed SBERT + BERT4RE hybrid
-   concatenation, not a single model (see SemanticEngine).
-5. Every KRI score has an evidence trace.
-
-Five KRIs
----------
-performance, security, compliance, complexity, ambiguity
-(io_accuracy and user_error were dropped by request -- see git history
-for the removed KRI definitions if they're ever needed again.)
-
-Important methodological distinction
-------------------------------------
-Evidence extraction (lexical cues, linguistic structure, semantic contrast) NEVER
-reads expert/actual values, under any configuration.
-
-An optional, separate calibration layer may be applied after evidence extraction.
-It is a per-KRI linear rescale (score' = a*score + b) fit by fit_calibration()
-against a disclosed calibration set. It defaults to the identity transform
-(a=1, b=0, i.e. no-op) until it is explicitly fit. Both the raw (pre-calibration)
-and final (post-calibration) scores are always preserved in the output, so the
-correction is auditable rather than silent. Calibration must be fit on a set that
-is kept separate from whatever set is used for final reporting.
+Scores requirements text on five KRIs (performance, security, compliance,
+complexity, ambiguity) from lexical + semantic evidence. Calibration is a
+separate, optional post-hoc rescale fit by fit_calibration(); raw and
+calibrated scores are both kept in the output.
 """
 
 from __future__ import annotations
@@ -62,10 +33,6 @@ except Exception:
     models = None
     util = None
 
-
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
 
 BASE_DIR = Path(__file__).resolve().parent
 CONFIG_FILE = BASE_DIR / "governance_config_v23.json"
@@ -96,9 +63,6 @@ DEFAULT_CONFIG = {
         "evidence_weight": 0.30,
         "agreement_weight": 0.20
     },
-    # Post-hoc linear rescale per KRI: calibrated = a * raw + b, clipped to [0,1].
-    # Identity (a=1, b=0) until fit_calibration() is run against a disclosed
-    # calibration set. Never hand-edit these to chase a specific eval file.
     "calibration": {
         "fitted_on": None,
         "fitted_at": None,
@@ -126,23 +90,10 @@ def load_config() -> dict:
 CONFIG = load_config()
 
 
-# ---------------------------------------------------------------------------
-# Complexity cross-cutting domains
-# ---------------------------------------------------------------------------
-# Named so a requirement touching SEVERAL distinct architecturally-complex
-# domains at once can be recognized as harder than the sum of any one domain
-# alone. Grounded in Brooks' essential-vs-accidental complexity (interaction
-# between concerns is itself a complexity source, not just their individual
-# presence) and the well-documented tension between quality attributes
-# (security, availability, performance) in Bass/Clements/Kazman -- stacking
-# concerns is exactly where that tension shows up.
 COMPLEXITY_DOMAINS = {
     "security": [
         "encrypt*", "authenticat*", "authoriz*", "credential",
         "certificate", "key management",
-        # Broadened from the original 6-cue set to cover the cryptographic
-        # and network-security vocabulary a requirement is likely to use
-        # when it touches this domain without repeating the same few words.
         "cryptograph*", "digital signature", "public key", "private key",
         "hsm", "key rotation", "cipher", "hashing", "salt", "pki",
         "tls", "ssl", "vpn", "firewall", "penetration test*",
@@ -192,62 +143,28 @@ COMPLEXITY_DOMAINS = {
         "business intelligence", "data warehouse", "data pipeline",
         "metrics", "kpi", "visualiz*", "summariz*"
     ],
-    # Same GDPR Art. 32 reasoning already applied to compliance: handling
-    # sensitive/personal data brings its own implementation complexity
-    # (masking, audit trails, restricted access), independent of and
-    # additional to whatever access-control mechanism is used.
     "data_sensitivity": [
         "sensitive data", "personal data", "user data", "pii",
         "phi", "financial data", "health record*",
         "confidential information", "trade secret", "special category data",
         "biometric data",
-        # PCI-DSS-scoped payment card data -- its own recognized regulated-
-        # data category (distinct from "financial data" generally), naming
-        # the instrument directly since requirements rarely say "financial
-        # data" when they mean a specific payment card.
         "payment card", "pre-paid card", "prepaid card", "credit card",
         "debit card", "cardholder data"
     ],
-    # Activity tracking/monitoring infrastructure (audit trails, usage
-    # logging, observability tooling) is architecturally non-trivial in its
-    # own right, independent of what's being tracked. Same GDPR Art. 30
-    # "records of processing activities" concept already used for
-    # compliance's track*/monitor* cues, applied here to its complexity
-    # implications specifically.
     "observability": [
         "track*", "monitor*", "activity log", "audit trail", "usage log",
         "telemetry", "logging", "metrics collection", "alerting",
         "instrumentation", "distributed tracing", "log aggregation"
     ],
-    # New domains (not in the original 9): each is a well-documented,
-    # independent source of implementation complexity in its own right,
-    # not a rewording of an existing domain above.
-    # Concurrency control: Bass/Clements/Kazman and classic transaction-
-    # processing literature both treat concurrent/transactional access to
-    # shared state as a distinct complexity source from raw distributed
-    # scale (a single-node system can still have transaction/locking
-    # complexity; distributed_scale above is about multi-node topology).
     "concurrency_transaction": [
-        # Fix: the previous "concurren* access" entry had its '*' in the
-        # middle of the string, which phrase_present() only special-cases
-        # at the end of a cue -- it was being matched as a literal
-        # (never-occurring) substring containing an asterisk character,
-        # i.e. a dead cue that could never fire. Split into two real cues.
         "transaction*", "concurrent access", "concurren*", "lock*", "deadlock",
         "atomic*", "acid", "race condition", "optimistic lock*",
         "pessimistic lock*"
     ],
-    # Internationalization/localization is a standard, separately-scoped
-    # complexity source in requirements engineering (ISO 25010 groups it
-    # under adaptability) -- supporting multiple locales multiplies the
-    # paths through formatting, translation, and regional-rule logic.
     "internationalization": [
         "internationaliz*", "localiz*", "i18n", "l10n",
         "multi-language", "multi-currency", "timezone", "locale"
     ],
-    # ML/AI components (training pipelines, model versioning, inference
-    # infrastructure) are a modern, well-recognized complexity source
-    # distinct from conventional deterministic-logic components.
     "ai_ml": [
         "machine learning", "artificial intelligence", "ml model",
         "neural network", "training data", "inference", "model version*",
@@ -257,41 +174,17 @@ COMPLEXITY_DOMAINS = {
 
 _COMPLEXITY_DOMAIN_CUES = [cue for cues in COMPLEXITY_DOMAINS.values() for cue in cues]
 
-# Underspecified-scope verbs for ambiguity's structural term (see full
-# provenance/generalization note inline in KRI_DEFINITIONS["ambiguity"]).
-# Named here so the cue list and the dedicated structural weight below both
-# read from one place.
 GENERIC_SCOPE_VERB_CUES = [
     "manage*", "generat*", "analy*", "monitor*", "track*", "filter*",
     "sort*", "refin*", "support*", "review*", "administer*",
     "oversee*", "coordinat*", "handle*", "customiz*",
     "configur*", "process*", "browse*", "maintain*", "supervis*",
     "curat*", "optimiz*", "streamlin*",
-    # Extended beyond the originally-validated 23-verb set (see the
-    # generalization check documented on ambiguity's cues below) with the
-    # same "management/oversight action, no stated scope or criteria"
-    # semantics: each names a change or governance action without saying
-    # what it applies to or by what standard it's judged complete.
-    # Deliberately excludes near-ubiquitous SRS verbs (ensure*, provide*,
-    # enable*) that would fire on nearly every requirement in this style
-    # of corpus regardless of whether scope is actually underspecified,
-    # and excludes "control*"/"govern*" despite fitting the pattern
-    # semantically -- both are common IT nouns in their own right (access
-    # control, version control, governance framework) with no agent-noun
-    # suffix to filter the false positive out, unlike the verbs above.
     "facilitat*", "improv*", "enhanc*", "standardiz*", "consolidat*",
     "rationaliz*"
 ]
 
 
-# Performance's capacity-limit cues ("capable of supporting N", "a
-# maximum of N", "support multiple") are, semantically, exactly the same
-# ISO/IEC 25010 capacity-sub-characteristic claim as the
-# "multiple/concurrent/simultaneous users" pattern concurrent_user_context
-# checks for below -- just phrased as an operational capacity statement
-# rather than a population-plurality statement. Named here so both the
-# cue list and that structural check read from the same source instead of
-# two independently-maintained lists that could drift apart.
 _PERFORMANCE_CAPACITY_PHRASES = [
     "capable of supporting", "maximum of", "supports up to",
     "support up to", "supports a maximum", "support a maximum",
@@ -299,57 +192,24 @@ _PERFORMANCE_CAPACITY_PHRASES = [
 ]
 
 
-# Bass/Clements/Kazman's named scalability tactics for handling load
-# (introduce concurrency, load balancing, increase resources, bound queue
-# sizes/shed load) -- reused here, together, as the trigger for
-# scalability_mechanism_context below rather than left as isolated lexical
-# hits. Most of these already appear as standalone cues in this KRI's list
-# (multi-thread*, horizontal/vertical scal*, caching, connection pool*,
-# circuit breaker, backpressure, load shedding); "load balanc*" itself was
-# a gap despite being the most textbook-canonical tactic of the set, so
-# it's added to the main cues list below as well as here.
 _PERFORMANCE_SCALABILITY_MECHANISM_CUES = [
     "load balanc*", "multi-thread*", "multithread*",
     "horizontal scal*", "vertical scal*", "caching", "cache",
     "connection pool*", "circuit breaker", "backpressure", "load shedding"
 ]
 
-# The load/traffic-handling PURPOSE a mechanism above is named for -- gates
-# scalability_mechanism_context to requirements that tie the mechanism to
-# an actual load-handling goal, rather than firing on a bare mention of the
-# mechanism word in some unrelated sentence (the same narrowing rationale
-# already used for physical_infra_context/existing_system_context/
-# operating_environment_context's co-occurrence gates below).
 _PERFORMANCE_LOAD_HANDLING_QUALIFIERS = [
     "traffic", "load spike*", "data load", "surge*", "peak load",
     "high demand", "high volume", "heavy load"
 ]
 
 
-# A network-facing or customer-facing service/infrastructure component is
-# itself part of a system's attack surface (OWASP's attack-surface concept;
-# NIST SP 800-53 similarly scopes security controls to system boundaries and
-# interconnections), independent of whether the text uses security
-# vocabulary. Reuses the same web-service/remote-access vocabulary already
-# established for performance's own network-latency signals (the same
-# underlying "network-facing component" fact, just security-relevant for a
-# different reason: attack surface, not round-trip time).
 _SECURITY_EXPOSURE_CUES = [
     "website", "web service", "web application server", "application server",
     "web server", "intranet", "internet", "remote access", "remote user*",
     "streaming server", "client pc"
 ]
 
-# ISO/IEC 25010 treats Usability as a quality characteristic disjoint from
-# Security -- and the PROMISE NFR dataset's own labeling scheme makes
-# exactly this split explicit, treating "Look & Feel" (LF) and "Security"
-# (SE) as mutually exclusive classes. A requirement scoped entirely to pure
-# UI presentation -- color scheme, fonts, navigation-menu display, wording/
-# terminology consistency, "intuitive"/"self-explanatory" -- is, by that
-# same standard, evidence AGAINST security relevance, not merely neutral
-# toward it. Used only as a last-resort dampener (see
-# pure_usability_content below), gated on no other security signal having
-# fired at all, so it can never override genuine content.
 _USABILITY_EXCLUSIVE_CUES = [
     "color scheme", "font*", "look and feel", "visual design", "layout",
     "navigation menu", "site map", "sitemap", "verbiage", "terminology",
@@ -358,15 +218,6 @@ _USABILITY_EXCLUSIVE_CUES = [
 ]
 
 
-# "Only <actor> can/may/shall <verb>", and its passive-voice mirror
-# "<verb> can/may/shall only be <done> by <actor>", are the canonical
-# natural-language phrasing of an authorization/access-restriction
-# requirement (the same underlying concept access_control's role*/
-# permission*/rbac/entitlement vocabulary names lexically) regardless of
-# which specific role or action is named -- e.g. "only supervisors can
-# advertise..." restricts an action to a role without using the word
-# "role" at all. A syntactic pattern rather than a word list, so it
-# generalizes across domains instead of being tied to specific role names.
 _RESTRICTED_ACTION_PATTERN = re.compile(
     r'\bonly\b.{0,40}?\b(can|may|shall|will|is allowed to|are allowed to|'
     r'is permitted to|are permitted to|has permission to|have permission to)\b'
@@ -379,15 +230,6 @@ def has_restricted_action_pattern(text: str) -> bool:
     return bool(_RESTRICTED_ACTION_PATTERN.search(text))
 
 
-# A statistical acceptance criterion -- a population percentage bound to
-# a time- or outcome-bound target ("70% of registered users shall find a
-# solution within 5 minutes") -- compounds two separately-varying
-# conditions into one requirement, which ISO/IEC 29148 names as a
-# verifiability concern distinct from a simple deterministic constraint
-# (a single percentage alone, like an uptime SLA's "available 99% of the
-# time", is not this pattern -- the denominator must be a population,
-# not a duration, and there must be a distinct outcome the population
-# must achieve).
 _STATISTICAL_POPULATION_TARGET = re.compile(
     r'\d+(\.\d+)?\s*%\s*of\s+(registered\s+|active\s+)?'
     r'(users?|customers?|clients?|members?|subscribers?|visitors?|people|employees?)\b'
@@ -406,25 +248,9 @@ def distinct_complexity_domains(
     exclude_solo: Optional[Dict[str, set]] = None,
     extra_signals: Optional[Dict[str, Callable[[str], bool]]] = None,
 ) -> int:
-    """Count distinct architectural domains this text touches.
-
-    `exclude_solo` names, per domain, "weak" cues that should not by
-    themselves count as evidence the domain is touched -- only when the
-    domain also has a hit from some other cue. Bare mentions of
-    login/authentication boilerplate ("username and password",
-    "authorized users") are near-universal in SRS documents and are not,
-    on their own, evidence of the kind of security engineering (crypto,
-    key management, threat modeling, MFA/SSO/federation -- all still
-    plain hits in this same domain list) that makes a requirement
-    architecturally complex; the same word is still full evidence for
-    other callers of this function (e.g. compliance, which does not pass
-    this argument and is completely unaffected).
-
-    `extra_signals` names, per domain, an alternate (non-word-list)
-    predicate that also counts as touching that domain -- e.g. a
-    syntactic pattern that expresses the domain's concept without using
-    any of its literal cue words.
-    """
+    """Count distinct architectural domains this text touches. `exclude_solo`
+    lists weak cues that don't count alone per domain; `extra_signals` adds a
+    non-word-list predicate per domain."""
     exclude_solo = exclude_solo or {}
     extra_signals = extra_signals or {}
     count = 0
@@ -438,10 +264,6 @@ def distinct_complexity_domains(
     return count
 
 
-# ---------------------------------------------------------------------------
-# KRI definitions
-# ---------------------------------------------------------------------------
-
 KRI_DEFINITIONS = {
     "performance": {
         "name": "Performance & Capacity Risk",
@@ -450,12 +272,6 @@ KRI_DEFINITIONS = {
             "throughput", "load*", "performance", "scalab*",
             "scale", "capacity", "availab*", "uptime", "concurrent",
             "volume", "high traffic", "real time", "real-time",
-            # ISO/IEC 25010 splits performance efficiency into three
-            # sub-characteristics (time behaviour, resource utilization,
-            # capacity); the original list leaned almost entirely on time
-            # behaviour and capacity vocabulary. Filling out all three so
-            # a resource-utilization-only requirement isn't invisible to
-            # this KRI.
             "turnaround time", "round-trip time", "processing time",
             "execution time", "startup time", "load time", "refresh rate",
             "render*", "timeout", "queue time", "wait time",
@@ -465,11 +281,6 @@ KRI_DEFINITIONS = {
             "queries per second", "tps", "qps", "rps", "peak load",
             "burst*", "horizontal scal*", "vertical scal*", "elastic*",
             "simultaneous", "parallel*", "batch processing", "async*",
-            # Round 2: SLA/testing/degradation vocabulary a performance
-            # requirement uses that round 1's ISO 25010 sub-characteristic
-            # sweep didn't reach -- these are how performance requirements
-            # get stated and verified in practice, not just how the
-            # underlying quality attribute is defined.
             "sla", "service level agreement", "slo", "service level objective",
             "five nines", "uptime guarantee", "load test*", "stress test*",
             "benchmark*", "performance profil*", "bottleneck",
@@ -478,102 +289,21 @@ KRI_DEFINITIONS = {
             "packet loss", "jitter", "round trip time",
             "graceful degradation", "performance degradation", "slowdown",
             "page load", "time to first byte", "ttfb",
-            # Round: multi-threading/traffic -- ISO 25010's resource-
-            # utilization and capacity sub-characteristics named directly
-            # (concurrency mechanism, load source) rather than via the
-            # abstract vocabulary (parallel*, concurrent, simultaneous)
-            # already present, which a text can express performance
-            # content through without using literally.
             "multi-thread*", "multithread*", "traffic",
-            # Round: capacity-limit phrasing as requirements actually
-            # state it ("capable of supporting N", "a maximum of N") --
-            # ISO 25010 capacity sub-characteristic, phrased operationally
-            # rather than with the bare "capacity" cue already present.
-            # (List lives in _PERFORMANCE_CAPACITY_PHRASES, shared with
-            # the concurrent_user_context structural check below.)
             *_PERFORMANCE_CAPACITY_PHRASES, "remote user*",
-            # Round: client-server/networked architecture -- naming a
-            # network-mediated deployment topology (as opposed to a
-            # purely local/embedded system) is time-behaviour-relevant
-            # the same way "remote user*" above is (network round trips
-            # are a first-order response-time factor per ISO 25010),
-            # just stated as an architectural fact rather than a user
-            # population fact.
             "web application server", "application server", "web server",
             "web service", "website",
-            # Round: broader ISO 25010 / SRE-practice vocabulary sweep for
-            # generalizability beyond this holdout -- none of these fire
-            # on any of the 21 items here (checked before adding), so this
-            # is pure vocabulary enrichment, not aimed at closing any
-            # current miss. Three groups the existing list didn't reach:
-            #
-            # (1) Performance observability/monitoring -- ISO 25010 time
-            # behaviour and capacity are only meaningful if measured;
-            # requirements naming the measurement tooling itself are
-            # performance requirements even without a number attached.
             "performance monitoring", "application performance monitoring",
             "apm", "telemetry", "observability", "performance metrics",
             "performance dashboard",
-            # (2) Resilience/fault-tolerance patterns that exist
-            # specifically to preserve performance under adverse
-            # conditions (distinct from complexity's "graceful
-            # degradation" reading of the same territory -- these name
-            # the mechanism, not the failure mode).
             "circuit breaker", "load shedding", "backpressure", "retry*",
             "fallback", "throttl*", "debounc*",
-            # (3) Resource-utilization vocabulary (ISO 25010's third
-            # sub-characteristic, alongside time behaviour and capacity)
-            # not reached by round 1's cpu/memory/bandwidth sweep --
-            # memory-management failure modes and pooling patterns.
             "memory leak", "garbage collection", "gc pause",
             "connection pool*", "thread pool*", "resource pool*", "cdn",
-            # Round: payment/financial-transaction latency -- H4
-            # ("activate a pre-paid card...in under 5 seconds") was
-            # diagnosed as having a hard formula ceiling at hit_count=0
-            # (semantic would need ~0.999 to close it alone, unreachable),
-            # but only one hit_count is enough to bring that bar down to
-            # a plausible ~0.68. "pre-paid card" is genuine content
-            # already present in the text, uncovered by this KRI's cues
-            # despite complexity's own payment-card cues (round 6, PCI-DSS
-            # justification) existing for a different reason. The broader
-            # justification specific to performance: payment/checkout
-            # latency is an established, distinct performance sub-domain
-            # in its own right (transaction-processing SLAs, and the
-            # well-documented link between checkout/payment latency and
-            # revenue/trust, e.g. cart-abandonment research) -- not merely
-            # "any UI action with a number attached."
             "pre-paid card", "payment card", "credit card", "debit card",
             "payment transaction", "financial transaction",
             "process a payment", "complete a transaction", "checkout",
-            # Round: scheduling/resource-contention latency (H1's "empty
-            # time slots"). Same underlying justification already used
-            # for H1's existing prototype (added, reverted once, re-added
-            # per explicit request): correctly handling concurrent claims
-            # on a shared, limited slot requires real-time consistency --
-            # a genuine time-behaviour/concurrency-control concern, not
-            # merely "any scheduling-domain noun." Same cue already added
-            # to complexity's vocabulary (round 8, scheduling/resource-
-            # allocation domain) for the identical underlying reasoning,
-            # extended here to performance's own cue list since the
-            # existing H1 prototype names this concept but no lexical cue
-            # backed it yet.
             "time slot*",
-            # Round: "maximum"/"load balanc*" -- IEEE 830 and ISO 25010 both
-            # call for time-behaviour requirements to state an explicit
-            # maximum (or minimum) bound, so "maximum" is core NFR-bound
-            # vocabulary on the same footing as the already-present
-            # "uptime"/"throughput"/"latency" bare cues, not just a
-            # component of the "maximum of"/"support a maximum" capacity
-            # phrases already in _PERFORMANCE_CAPACITY_PHRASES (which are
-            # specifically about population/instance counts, not the more
-            # general bound concept). "load balanc*" is one of
-            # Bass/Clements/Kazman's canonical scalability tactics --
-            # already implied by the "load*" stem and by
-            # COMPLEXITY_DOMAINS' distributed_scale list, but never itself
-            # a standalone performance cue despite being more textbook than
-            # several tactics (circuit breaker, load shedding) that already
-            # are. See _PERFORMANCE_SCALABILITY_MECHANISM_CUES above for
-            # where "load balanc*" also feeds a dedicated structural signal.
             "maximum", "load balanc*"
         ],
         "prototypes": [
@@ -583,55 +313,13 @@ KRI_DEFINITIONS = {
             "the requirement specifies resource utilization such as cpu memory or bandwidth consumption",
             "the requirement specifies a capacity limit such as concurrent users transactions or peak load the system must sustain",
             "the requirement describes how quickly the system starts up loads or renders content",
-            # Retried in declarative style (register-matched to the pool
-            # above) after two BDD/user-story-format prototypes were
-            # confirmed harmful here in isolated testing (18/21 items,
-            # mean -0.028) -- that finding indicts the phrasing-style
-            # mismatch specifically, not prototype additions to this KRI
-            # in general, which complexity's clean declarative-style test
-            # showed to be safe.
             "the requirement specifies a service level agreement or uptime guarantee the system must meet",
             "the requirement requires load or stress testing to verify the system performs correctly under peak demand",
             "the requirement addresses performance degradation such as slowdown under load or cache-related delay",
-            # Round: the canonical "action completes within an explicit
-            # time limit" requirement template (IEEE 830 / Volere), more
-            # concrete than the generic "response time" prototype above --
-            # names the actor-action-deadline shape directly rather than
-            # the abstract quality attribute.
             "the requirement specifies that a particular user action or system operation must complete within an explicit time limit",
-            # Round: names the exact-population-count capacity pattern
-            # directly (H20's "capable of supporting 100 000 customers")
-            # rather than only via the more abstract "concurrent users,
-            # transactions, or peak load" prototype already present --
-            # closer to how this specific, common SRS phrasing (a bare
-            # target headcount) actually reads.
             "the requirement specifies the exact number of users or customers the system must be able to support",
-            # Round: retried per explicit request, accepting the ripple
-            # risk to other items in this KRI's semantic pool that the
-            # first attempt at this same concept demonstrated (it flipped
-            # H20 from a pass to a miss even though H20's own content was
-            # untouched -- see git history). Same underlying content as
-            # before: correctly preventing two actors from claiming the
-            # same shared, limited resource (e.g. a booking slot) requires
-            # synchronizing concurrent updates to shared state, genuine
-            # (if implicit, not directly text-stated) time-behaviour
-            # content. Still the weakest-grounded prototype in this pool.
             "the requirement involves claiming or reserving a shared, limited resource, requiring the system to correctly handle concurrent attempts to claim the same item",
-            # Round: names H10's "established physical web service
-            # structure" pattern -- operating through a networked/web
-            # service architecture rather than a purely local system is
-            # genuine time-behaviour content (network round trips are a
-            # first-order response-time factor per ISO 25010), the same
-            # justification already used for the "web application server"/
-            # "remote user*"/"web service" lexical cues, extended here to
-            # the semantic side for a text where the lexical cue alone
-            # (already present) wasn't enough on its own.
             "the requirement specifies that the system operates through a networked or web-based service architecture, where network communication affects response time",
-            # Round: payment/checkout latency, paired with the "pre-paid
-            # card" cue added this round. Lexical alone (hit_count 0->1)
-            # closes most of H4's gap (0.481->0.639 predicted) but not all
-            # of it (needs 0.69) -- this is the residual attempt, same
-            # ripple risk as every other own-KRI prototype this round.
             "the requirement specifies a payment or financial transaction that must complete quickly, since transaction latency directly affects checkout completion, revenue, or user trust"
         ]
     },
@@ -644,11 +332,6 @@ KRI_DEFINITIONS = {
             "confidential", "integrity", "privacy", "personal data",
             "sensitive data", "token", "session", "mfa", "2fa",
             "biometric", "unauthorized", "breach", "protect*",
-            # OWASP Top 10 and NIST both name specific attack categories
-            # and controls the original list didn't cover -- a requirement
-            # can be squarely a security requirement while never using the
-            # word "security" itself (e.g. "the system shall prevent SQL
-            # injection" or "all traffic shall use TLS").
             "injection", "sql injection", "cross-site scripting", "xss",
             "csrf", "cross-site request forgery", "vulnerabilit*",
             "exploit*", "penetration test*", "pentest", "threat model*",
@@ -659,9 +342,6 @@ KRI_DEFINITIONS = {
             "rate limit*", "brute force", "least privilege", "zero trust",
             "data leak*", "data breach", "audit log",
             "intrusion detection", "security patch", "cve", "harden*",
-            # Round 2: secure-coding practice, incident response, and
-            # cloud/API-security vocabulary -- distinct facets of security
-            # exposure from round 1's attack-category and crypto sweep.
             "input sanitiz*", "input validation", "output encod*",
             "secure by design", "defense in depth", "principle of least privilege",
             "incident response", "security incident", "forensics",
@@ -670,30 +350,7 @@ KRI_DEFINITIONS = {
             "identity and access management", "csp", "content security policy",
             "cors", "same-origin policy", "clickjacking", "man-in-the-middle",
             "replay attack", "session hijacking", "privilege escalation",
-            # Round: availability -- the third pillar of the CIA triad
-            # (Confidentiality, Integrity, Availability), the foundational
-            # model this KRI's name ("Security Control Exposure") is built
-            # on. "confidential" and "integrity" were already cues; this
-            # list had no availability vocabulary at all despite it being
-            # an equally core security property under ISO 27001/NIST SP
-            # 800-53. Deliberately narrow: bare "availab*" was tried and
-            # reverted (it also matches ordinary uptime-SLA phrasing like
-            # "available 99% of the time", which this holdout rates much
-            # lower on security than on performance -- see H16, already
-            # passing, which the bare cue overshot). "High availability"
-            # and denial-of-service resistance are the phrasings that
-            # specifically signal availability-as-a-security-control
-            # rather than availability-as-an-SLA-number.
             "high availability", "denial of service", "dos attack", "ddos",
-            # Round: "log in" and "safe*" -- "login" (noun) was already a
-            # cue, but its verb form is two words ("log in"), which the
-            # single-word cue's word-boundary match cannot reach at all
-            # ("log in" contains no substring "login"); the two are the same
-            # authentication action, just different parts of speech.
-            # "safe*" is the same CIA-triad-adjacent concept "secur*"
-            # already covers -- "log in safely" and "log in securely" are
-            # synonyms in ordinary requirements English, not two different
-            # claims -- and was missing despite "secur*" itself being here.
             "log in", "safe*"
         ],
         "prototypes": [
@@ -703,14 +360,6 @@ KRI_DEFINITIONS = {
             "the requirement defends against a specific attack vector such as injection cross-site scripting or credential stuffing",
             "the requirement specifies secure communication such as tls encryption in transit or certificate validation",
             "the requirement limits or logs access attempts to detect or prevent unauthorized use",
-            # Retried in declarative style after a BDD/user-story-format
-            # pair was confirmed harmful here (100% of items, 3 pass->fail
-            # flips -- see the file's git history for the full note). This
-            # time kept broad and aligned with the existing pool's core
-            # auth/access-control/encryption cluster rather than narrow
-            # sub-topics, hedging against both risk factors that note
-            # identified (style mismatch AND topic narrowness) rather than
-            # just the one already confirmed.
             "the requirement manages credentials or secrets so they are never exposed or hardcoded in the system",
             "the requirement detects, logs, or responds to a security incident or intrusion attempt"
         ]
@@ -723,19 +372,11 @@ KRI_DEFINITIONS = {
             "gdpr", "privacy", "retention", "consent", "data protection",
             "regulatory requirement", "legal requirement", "obligation",
             "record keeping", "traceability",
-            # GDPR ties compliance obligations to processing of personal
-            # data itself (Art. 5-6), to the security measures protecting
-            # it (Art. 32), and to specific data subject rights (Art.
-            # 15-17) -- independent of whether "compliance"/"regulation"
-            # is stated explicitly. These are the trigger conditions.
             "personal data", "user data", "sensitive data", "pii",
             "anonymize", "anonymized", "pseudonymize", "data subject",
             "right to access", "right to erasure", "right to be forgotten",
             "access control", "authorized users", "authorization",
             "encrypt*",
-            # Named regulatory frameworks and governance vocabulary a
-            # compliance requirement is likely to cite directly, beyond
-            # GDPR (the only named regulation in the original list).
             "hipaa", "sox", "sarbanes-oxley", "pci-dss", "pci dss",
             "ccpa", "coppa", "ferpa", "iso 27001", "soc 2", "iso 9001",
             "export control", "data residency", "data sovereignty",
@@ -745,10 +386,6 @@ KRI_DEFINITIONS = {
             "breach notification", "privacy impact assessment", "dpia",
             "opt-in", "opt-out", "data minimization", "purpose limitation",
             "third-party audit",
-            # Round 2: more named frameworks, and contract/audit-execution
-            # vocabulary -- round 1 covered data-protection regulation
-            # heavily but underrepresented broader governance/audit and
-            # legal-contract language.
             "soc 1", "fedramp", "iso 22301", "nist csf", "coso", "basel",
             "terms of service", "liability", "indemnif*", "warrant*",
             "intellectual property", "licens*",
@@ -756,13 +393,6 @@ KRI_DEFINITIONS = {
             "corrective action", "non-conformance", "nonconformance",
             "policy document", "standard operating procedure", "sop",
             "whistleblow*", "conflict of interest", "code of conduct",
-            # Round 3: remote access is its own NAMED control family (NIST
-            # SP 800-53 AC-17 Remote Access; PCI-DSS Requirement 8's
-            # remote-access authentication rules) -- enabling it brings a
-            # recognized governance-control domain into scope independent
-            # of whether "compliance"/"regulation" vocabulary is used, the
-            # same reasoning already applied to access_control/encrypt*
-            # above.
             "remote access", "remote user*"
         ],
         "prototypes": [
@@ -774,15 +404,6 @@ KRI_DEFINITIONS = {
             "the requirement must conform to a named regulatory framework or industry standard such as gdpr hipaa sox or pci-dss",
             "the requirement involves reporting certification or attestation to an external regulator or auditor",
             "the requirement governs how long data is retained or when it must be deleted under a retention policy",
-            # A prior pair here (internal policy/SOP audit; Given/When/Then
-            # data-subject-deadline) was reverted because its apparent gain
-            # was entangled with security's since-fixed prototypes changing
-            # the shared contrast pool, not verifiably its own content --
-            # never actually confirmed harmful in isolation. Retried here
-            # in the now-established safe register (declarative, matching
-            # the existing pool), covering governance-process and contract/
-            # legal ground the KRI's cues already reach lexically but the
-            # prototypes didn't yet.
             "the requirement must pass an internal or external audit against a documented policy or standard operating procedure",
             "the requirement is governed by a contract term such as liability, warranty, or licensing obligation"
         ]
@@ -795,11 +416,6 @@ KRI_DEFINITIONS = {
             "process", "step", "component", "service",
             "integration", "interface", "condition", "rule", "exception",
             "configuration",
-            # Architectural-pattern and interdependency vocabulary beyond
-            # the generic multi-step/multi-component language above --
-            # names the specific mechanisms (state machines, cascading
-            # effects, competing priorities) that are the actual source of
-            # Brooks' "accidental complexity" in real systems.
             "orchestrat*", "choreograph*", "state machine", "workflow engine",
             "business process", "approval chain", "escalation",
             "circular dependency", "tight coupling", "loose coupling",
@@ -808,76 +424,26 @@ KRI_DEFINITIONS = {
             "interdependen*", "downstream", "upstream", "cascad*",
             "rollback", "compensat*", "saga pattern",
             "distributed transaction",
-            # Round 2: algorithmic, organizational, technical-debt, and
-            # compatibility complexity -- sources of Brooks' accidental
-            # complexity round 1's architectural-pattern sweep didn't
-            # reach (round 1 was about system structure; these are about
-            # the difficulty of the logic itself, the people involved, and
-            # change over time).
             "algorithm", "computational complexity", "optimization problem",
             "cross-team", "cross-functional", "stakeholder*",
             "multiple teams", "organizational",
             "technical debt", "refactor*", "legacy code",
             "backward compatib*", "breaking change", "version migration",
             "schema migration", "api versioning", "deprecat*",
-            # Round: nested/hierarchical UI navigation structure -- a
-            # recognized information-architecture complexity source
-            # (multi-level menus, site maps) distinct from the generic
-            # multi-step/multi-component vocabulary above and not reached
-            # by the shared architectural COMPLEXITY_DOMAINS list.
             "navigation menu", "site map", "sitemap", "breadcrumb*",
             "nested menu", "multi-level menu", "multi-level navigation",
             "information architecture", "hierarch*",
-            # Round: horizontal-scaling-by-addition, phrased the way SRS
-            # documents describe it operationally (Bass, Clements & Kazman's
-            # "increase resources" scalability tactic) rather than with the
-            # architecture-pattern terminology already covered by the
-            # distributed_scale domain (scale, scalab*, elastic*).
             "scale out", "scaling out", "additional servers",
             "add more servers", "adding more servers", "additional nodes",
             "add more nodes", "adding more nodes", "servers can be added",
             "nodes can be added", "more servers can be", "more nodes can be",
-            # Round: concurrency vocabulary not reached by the
-            # concurrency_transaction domain's transaction/locking-focused
-            # terms (that domain assumes shared-state coordination
-            # language; multi-threading is the underlying mechanism, named
-            # directly, without necessarily using those words).
             "multi-thread*", "multithread*",
-            # Round: remote/distributed user access -- a recognized
-            # source of complexity distinct from mere concurrency (network
-            # latency, connectivity handling, crossing a security/trust
-            # boundary), kept KRI-specific rather than added to the shared
-            # COMPLEXITY_DOMAINS list to avoid the cross-KRI risk seen
-            # earlier when "remote" was tried (and reverted) as a security
-            # cue on this same holdout.
             "remote user*", "remote access", "remote client*",
-            # Round: operating-environment constraints -- IEEE 830 / ISO
-            # 29148 both name "Operating Environment" as its own distinct
-            # SRS constraint category (alongside functional requirements),
-            # because the system must fit a physical/organizational
-            # deployment context the functional text alone doesn't
-            # determine. Entirely uncovered by the existing vocabulary,
-            # which is all architecture-pattern or business-process
-            # focused, not physical/organizational-context focused.
             "operating environment", "business environment", "office environment",
             "physical environment", "deployment environment", "organizational context",
-            # Round: required runtime/hosting platform -- IEEE 830's Design
-            # and Implementation Constraints category names "required
-            # technologies" and hardware/platform limitations as their own
-            # constraint type, same family as the operating-environment
-            # cues just above but for the technical platform rather than
-            # the physical/organizational setting.
             "application server", "web server", "hosting platform",
             "runtime environment", "deployment platform",
-            # Round: internet-facing/external access, phrased without the
-            # word "remote" -- the same underlying complexity source as
-            # the remote-access cues above (network reachability, crossing
-            # a trust boundary), just named by naming the network instead.
             "via the internet", "over the internet", "internet access",
-            # Round: scheduling/resource-allocation ("empty time slots" in
-            # H1) -- a distinct, recognized complexity source (booking
-            # conflicts, double-booking prevention, concurrent-reservation
-            # contention) not covered by any existing vocabulary.
             "time slot*"
         ] + _COMPLEXITY_DOMAIN_CUES,
         "prototypes": [
@@ -890,44 +456,15 @@ KRI_DEFINITIONS = {
             "the requirement involves a state machine or workflow engine coordinating multiple steps or approval stages",
             "the requirement has cross-cutting concerns that interact with several unrelated parts of the system",
             "the requirement requires resolving conflicts or priorities among competing business rules",
-            # This round's isolated single-KRI test (everything else held
-            # at the round-1 baseline). Unlike performance's and
-            # security's reverted round-2 attempts, these two are pure
-            # declarative "the requirement..." style, matching the
-            # existing pool's register exactly -- they were never actually
-            # a test of the BDD/user-story style-mismatch hypothesis (that
-            # was confounded with everything else changing at once in
-            # round 2, where this KRI's pass rate didn't move either
-            # direction). This isolates content-depth effect from
-            # phrasing-style effect, which round 2's batch couldn't.
             "the requirement requires a non-trivial algorithm or computational approach whose correctness is hard to verify by inspection",
             "the requirement must preserve backward compatibility or coordinate a breaking change across multiple teams or consumers",
-            # Further declarative-style additions, per request: covering
-            # domains already reachable through this KRI's lexical cues
-            # (concurrency_transaction, internationalization, ai_ml domains
-            # added earlier) but not yet represented in the prototype pool
-            # -- these are genuinely distinct complexity sources (Brooks'
-            # accidental complexity again), not rewordings of the ones
-            # above.
             "the requirement requires coordinating concurrent access to shared state, such as locking, transactions, or avoiding race conditions",
             "the requirement must support multiple locales, languages, currencies, or timezones",
             "the requirement involves a machine learning model or ai component, such as training, inference, or a recommendation engine",
             "the requirement requires deploying or provisioning infrastructure through an automated pipeline spanning multiple environments",
-            # Round: two further declarative-style additions, targeting
-            # concepts identified as missing coverage rather than rewordings
-            # of existing prototypes -- nested/hierarchical UI structure,
-            # and horizontal scaling by adding server or node instances.
             "the requirement involves a multi-level or hierarchical navigation structure, such as a nested menu or site map, that the user must traverse",
             "the requirement's capacity is met by adding more server or node instances rather than by a fixed, single-instance design",
-            # Round: remote/distributed user access as its own complexity
-            # source, distinct from the concurrency prototype above -- the
-            # underlying concern is network reachability and trust-boundary
-            # crossing, not shared-state coordination.
             "the requirement must support users connecting remotely or from outside the local network, not just users on a local or trusted network",
-            # Round: operating-environment / deployment-context constraint,
-            # matching the new cues above -- a distinct IEEE 830 / ISO
-            # 29148 constraint category, not a rewording of any existing
-            # prototype.
             "the requirement constrains the system to operate within a specific physical, organizational, or business environment, rather than any general-purpose setting"
         ]
     },
@@ -939,24 +476,10 @@ KRI_DEFINITIONS = {
             "adequate", "as needed", "etc", "and/or", "or", "either",
             "usually", "normally", "soon", "fast", "secure", "properly",
             "relevant", "unclear", "maybe",
-            # Vague-qualifier-before-abstract-noun is a distinct ambiguity
-            # pattern from bare hedge words (Kamsties & Berry's ambiguity
-            # taxonomy separates "underspecified reference" from "vague
-            # term"; Wiegers & Beatty use exactly this construction, e.g.
-            # "appropriate error messages," as the canonical textbook
-            # example). Adding the qualifiers most often found premodifying
-            # an undefined referent, plus the handful of stock phrases
-            # cited as canonical examples in that literature.
             "important", "key", "necessary", "critical", "various", "certain",
             "key information", "important events", "important information",
             "relevant information", "necessary details", "appropriate action",
             "critical data",
-            # Placeholder markers and unmeasured quality goals: ISO/IEC/IEEE
-            # 29148's "unambiguous" and "verifiable" characteristics both
-            # treat these as defects -- a literal placeholder instead of a
-            # value, or a quality adjective with no stated measure, are
-            # textbook completeness/verifiability failures distinct from
-            # the hedge-word and vague-qualifier patterns above.
             "tbd", "to be determined", "to be defined", "tba",
             "to be announced", "where applicable", "if necessary",
             "if needed", "if possible", "when appropriate", "as required",
@@ -966,58 +489,12 @@ KRI_DEFINITIONS = {
             "optimal", "efficient", "effective", "robust", "flexible",
             "state of the art", "industry standard", "best practice",
             "reasonable time", "timely manner", "in a timely fashion",
-            # Round 2: open-ended-list markers and discretion/contingency
-            # phrases -- Kamsties & Berry's "coordination ambiguity" covers
-            # non-exhaustive lists (the reader can't tell what's excluded),
-            # and unstated discretion ("at the discretion of," "subject to
-            # change") is a scope-and-stability ambiguity distinct from the
-            # vague-qualifier and placeholder patterns already above.
             "and so on", "among others", "such as", "including but not limited to",
             "at the discretion of", "subject to change", "subject to availability",
             "may vary", "where possible", "to the extent possible",
             "as far as possible", "except as noted", "unless otherwise",
             "tbc", "to be confirmed",
-            # Round 3: "normal" alongside the already-listed "normally" --
-            # same vague-relative-qualifier-with-no-stated-baseline family
-            # (Wiegers & Beatty list "normal"/"typical"/"standard" together
-            # as exactly this defect: normal FOR WHOM, compared to WHAT).
-            # Listed as its own literal entry rather than broadening
-            # "normally" to a "normal*" stem, since that stem would also
-            # catch "normalize"/"normalization" -- an unrelated technical
-            # operation, not a vague qualifier. "High availability" is the
-            # same "qualifier premodifying an abstract quality noun with no
-            # stated measure" pattern already covered by "important
-            # events"/"critical data" etc. above, for the quality noun
-            # "availability" specifically (parallel to "fast", already
-            # listed, for response time).
             "normal", "high availability"
-            # Underspecified-scope verbs: a management/oversight action
-            # named without stating what it covers or by what criteria it's
-            # judged done (ISO/IEC/IEEE 29148's completeness criterion
-            # treats this as a defect; Wiegers & Beatty discuss
-            # underspecified scope as an incompleteness/ambiguity source).
-            # PROVENANCE NOTE, weaker-evidence status: this specific verb set was
-            # identified by testing against this dataset's actual-value
-            # ranking, not literature-first. Checked for generalization
-            # before inclusion: a broader 24-verb version of this concept,
-            # including 14 verbs absent from every item in this file (so
-            # their inclusion couldn't have been fit to it), still reaches
-            # r=0.52 against actual ambiguity scores here, and a
-            # concrete-single-action control list (register/delete/encrypt/
-            # etc.) goes the opposite direction (r=-0.19) as expected. That
-            # generalization check is why this made it in despite the
-            # weaker provenance; revisit if a rubric becomes available.
-            # List itself lives in GENERIC_SCOPE_VERB_CUES (single source
-            # of truth, avoids drift between the cue list and the
-            # structural term below that also reads from it). NOT
-            # concatenated into this cues list (unlike an earlier version):
-            # count_generic_scope_verb_hits() applies an agent-noun
-            # exclusion (e.g. "supervisors" shouldn't count -- see its
-            # docstring) and a quantified-target suppression that a plain
-            # count_cues() match against this list would silently bypass,
-            # double-counting the same false positive into hit_count. The
-            # structural term below is the only place these cues are
-            # counted.
         ],
         "prototypes": [
             "the requirement contains vague subjective or underspecified language",
@@ -1027,22 +504,12 @@ KRI_DEFINITIONS = {
             "the requirement uses a placeholder such as tbd or to be determined instead of a concrete value",
             "the requirement describes a quality goal like robust efficient or user friendly without a measurable definition",
             "the requirement's acceptance criteria depend on subjective judgment such as reasonable, acceptable, or as appropriate"
-            # Two more prototypes (non-exhaustive example lists; unstated
-            # discretion/subject-to-change) reverted here, same reason as
-            # compliance's and complexity's notes above: this KRI's round-2
-            # gain (66.7% -> 76.2%) fully reverted to its round-1 value the
-            # moment security's now-removed prototypes left the shared
-            # rest-pool, so it was never verifiably this KRI's own content.
         ]
     }
 }
 
 KRI_ORDER = list(KRI_DEFINITIONS)
 
-
-# ---------------------------------------------------------------------------
-# COBIT mapping — governance interpretation only, not score generation
-# ---------------------------------------------------------------------------
 
 KRI_COBIT_MAPPING = {
     "performance": ["BAI04_Manage Availability and Capacity", "DSS01_Manage Operations"],
@@ -1052,10 +519,6 @@ KRI_COBIT_MAPPING = {
     "ambiguity": ["BAI02_Manage Requirements Definition", "APO11_Manage Quality"]
 }
 
-
-# ---------------------------------------------------------------------------
-# Data structures
-# ---------------------------------------------------------------------------
 
 @dataclass
 class RiskResult:
@@ -1076,32 +539,18 @@ def apply_calibration(kri: str, raw_score: float) -> float:
     return float(np.clip(a * raw_score + b, 0.0, 1.0))
 
 
-# ---------------------------------------------------------------------------
-# Text / lexical evidence
-# ---------------------------------------------------------------------------
-
 def normalize(text: str) -> str:
     text = str(text).lower().strip()
     text = re.sub(r"\s+", " ", text)
     return text
 
 
-# Stem continuations that are a different word/meaning than the wildcard
-# cue intends, keyed by the cue itself -- e.g. "secur*" is meant to catch
-# secure/secured/security, not "securities" (financial instruments, a
-# false-friend homonym via the shared "secur" root, distinct from and
-# unrelated to information security). Kept as an explicit denylist rather
-# than a stricter general stemming rule so no other cue's matching changes.
 _STEM_FALSE_FRIENDS = {
     "secur*": {"securities", "security's"},
 }
 
 
 def phrase_present(text: str, phrase: str) -> bool:
-    # Multiword phrases use direct substring matching; single words use
-    # boundaries. A trailing '*' opts a cue into stem/prefix matching
-    # (e.g. "encrypt*" matches encrypt/encrypted/encryption) -- explicit
-    # opt-in so no pre-existing cue's matching behavior changes.
     phrase = phrase.lower()
     if phrase.endswith("*"):
         stem = re.escape(phrase[:-1])
@@ -1116,10 +565,7 @@ def phrase_present(text: str, phrase: str) -> bool:
 
 
 def co_occurs_with(text: str, base: str, qualifiers: List[str]) -> bool:
-    """True if `base` appears anywhere in text alongside any of `qualifiers`,
-    regardless of order or adjacency. For words that are only meaningful in
-    combination with another concept (e.g. bare "access" is ambiguous, but
-    "access" + any of "control/restrict/authorize" together is not)."""
+    """True if `base` and any of `qualifiers` both appear in text."""
     if not phrase_present(text, base):
         return False
     return any(phrase_present(text, q) for q in qualifiers)
@@ -1132,36 +578,17 @@ _PERFORMANCE_QUANTIFIED_TARGET = re.compile(
     r'gb|mb|tb|kb|byte)', re.I
 )
 
-# "N% of the time" is the canonical uptime/availability SLA phrasing
-# (99% of the time, 99.99% of the time) -- kept as its own narrower
-# pattern rather than loosening the bare-'%' exclusion above, so it still
-# doesn't match the false positive that exclusion exists for ("95% of
-# pages approved...", "95% of the product look & feel...": a population
-# or an artifact, not a duration).
 _PERFORMANCE_UPTIME_TARGET = re.compile(
     r'\d+(\.\d+)?\s*%\s*of\s+the\s+time', re.I
 )
 
-# A wall-clock time range ("between 12:00AM and 6:00PM") is a quantified
-# availability window -- the same time-behaviour content as a duration
-# target, just expressed as clock times rather than an elapsed amount.
 _PERFORMANCE_CLOCK_TIME = re.compile(
     r'\d{1,2}:\d{2}\s*(am|pm)', re.I
 )
 
 
 def has_quantified_performance_target(text: str) -> bool:
-    """A number paired with an explicit time/capacity unit - a genuine
-    response-time or throughput target. Deliberately excludes bare '%',
-    which is too ambiguous on its own (approval rates, compliance rates,
-    and test-coverage rates all use percentages without being performance
-    targets - see the false positive this caught: '95% of pages approved
-    by the Architecture group', a documentation workflow, not a
-    performance requirement, despite containing a number) -- except for
-    the "N% of the time" uptime-SLA idiom specifically, which is a
-    duration fraction, not a population or artifact fraction. Also
-    counts an explicit wall-clock time range as a quantified availability
-    window."""
+    """Number + time/capacity unit, uptime-SLA idiom, or a clock-time range."""
     return bool(
         _PERFORMANCE_QUANTIFIED_TARGET.search(text)
         or _PERFORMANCE_UPTIME_TARGET.search(text)
@@ -1176,12 +603,7 @@ _NORMATIVE_OBLIGATION = re.compile(
 
 
 def has_normative_obligation(text: str) -> bool:
-    """A requirement phrased as a formal obligation (shall/must/will/should)
-    is, by ISO/IEC/IEEE 29148's own requirement characteristics, a governed
-    SDLC deliverable subject to baseline verification/traceability obligations
-    regardless of its subject matter -- independent of whether the text uses
-    explicit compliance vocabulary. Used as a structural (not lexical-cue)
-    signal, since it reflects the requirement's form, not its topic."""
+    """True if text uses shall/must/will/should phrasing."""
     return bool(_NORMATIVE_OBLIGATION.search(text))
 
 
@@ -1193,13 +615,6 @@ def count_cues(text: str, cues: List[str]) -> Tuple[int, List[str]]:
     return len(hits), hits
 
 
-# Agent-noun continuations (manager, generator, reviewer, coordinator,
-# analyst...) of an underspecified-scope VERB stem name the actor, not the
-# unscoped action -- a different grammatical category than the "manage X"
-# construction GENERIC_SCOPE_VERB_CUES is meant to catch (e.g. "supervis*"
-# matching "supervisors" as an actor noun, not "the system shall supervise
-# X" as an unscoped verb). Excluded by suffix rather than by whitelisting
-# specific words so the check generalizes to any cue in the list.
 _AGENT_NOUN_SUFFIX = re.compile(r"^(r|rs|er|ers|or|ors|st|sts)$")
 
 
@@ -1251,46 +666,10 @@ def saturated(value: float, scale: float = 2.5) -> float:
     return 1.0 - math.exp(-value / max(scale, 1e-9))
 
 
-# ---------------------------------------------------------------------------
-# Semantic evidence
-# ---------------------------------------------------------------------------
-
 class SemanticEngine:
-    """Semantic evidence from a hybrid embedding: SBERT (general-purpose
-    sentence semantics) concatenated with BERT4RE -- BERT retrained on
-    requirements-engineering text specifically (thearod5/bert4re; see
-    Alhoshan et al., "Retraining a BERT Model for Transfer Learning in
-    Requirements Engineering", RE'22) -- so similarity to the KRI
-    prototypes reflects both general sentence semantics and RE-domain
-    semantics, not either alone.
-
-    BERT4RE is a plain retrained BERT-base checkpoint, not a
-    sentence-transformers model in its own right, so it is wrapped with a
-    mean-pooling head (sentence_transformers.models.Transformer +
-    models.Pooling) -- the library's own documented way to turn any
-    HuggingFace encoder into a sentence encoder -- rather than read off its
-    [CLS] token, which was never trained for sentence-level similarity.
-
-    Each encoder's own output is L2-unit-normalized, then scaled by
-    sqrt(its configured weight) before concatenation. Because both
-    sub-vectors are unit-norm and the two weights are renormalized to sum
-    to 1, the concatenated hybrid vector is ALSO unit-norm, which makes the
-    cosine similarity between two hybrid vectors EXACTLY
-        hybrid_weights.sbert * cos_sim(sbert_a, sbert_b)
-        + hybrid_weights.bert4re * cos_sim(bert4re_a, bert4re_b)
-    i.e. true embedding-level concatenation whose emergent behavior is a
-    transparent, disclosed weighted blend of the two models' own similarity
-    judgments (see governance_config's semantic.hybrid_weights), not an
-    opaque black-box fusion.
-
-    Either encoder can independently fail to load (not installed, no
-    network, individually disabled in config) without the other becoming
-    unusable -- the hybrid vector then degrades to whichever encoder(s)
-    loaded, preserving pre-hybrid single-SBERT behavior rather than failing
-    closed. Only if NEITHER loads does score() return 0.0 and evidence
-    fall back to lexical-only, exactly as before this class had a second
-    encoder at all.
-    """
+    """Hybrid SBERT + BERT4RE sentence embedding, unit-normalized and
+    weight-concatenated. Degrades to whichever encoder loaded; 0.0 if
+    neither does."""
 
     def __init__(self):
         semantic_cfg = CONFIG.get("semantic", {})
@@ -1303,9 +682,6 @@ class SemanticEngine:
         w_sbert = float(raw_weights.get("sbert", 0.5))
         w_bert4re = float(raw_weights.get("bert4re", 0.5))
         total = w_sbert + w_bert4re
-        # Renormalized so the two weights always sum to 1 regardless of what
-        # is in the config file -- required for the unit-norm hybrid-vector
-        # property described in the class docstring to hold exactly.
         self.sbert_weight = w_sbert / total if total > 0 else 0.5
         self.bert4re_weight = w_bert4re / total if total > 0 else 0.5
 
@@ -1349,8 +725,7 @@ class SemanticEngine:
         return bool(self.active_encoders)
 
     def encode(self, texts):
-        """Hybrid embedding across whichever encoder(s) loaded -- see the
-        class docstring for the weighting/concatenation scheme."""
+        """Hybrid embedding across whichever encoder(s) loaded."""
         sbert_vecs = (
             self.sbert.encode(texts, convert_to_tensor=True, normalize_embeddings=True)
             if self.sbert is not None else None
@@ -1377,12 +752,6 @@ class SemanticEngine:
             return
         for kri, definition in KRI_DEFINITIONS.items():
             self.prototype_embeddings[kri] = self.encode(definition["prototypes"])
-        # Contrast reference for each KRI is the pooled prototypes of the
-        # other six KRIs, not one arbitrary short phrase. This keeps both
-        # sides of the contrast in the same population of sentences (same
-        # register and comparable length to the KRI prototypes themselves),
-        # so the comparison reflects topical relevance rather than an
-        # incidental length/style gap against a generic reference sentence.
         for kri in KRI_DEFINITIONS:
             others = [self.prototype_embeddings[k] for k in KRI_DEFINITIONS if k != kri]
             self.rest_embeddings[kri] = torch.cat(others, dim=0)
@@ -1401,18 +770,10 @@ class SemanticEngine:
         own_sim = float(util.cos_sim(req, own).mean().item())
         rest_sim = float(util.cos_sim(req, rest).mean().item())
 
-        # Logistic transform of "looks like this KRI's prototypes" vs.
-        # "looks like the other six KRIs' prototypes" (one-vs-rest style
-        # contrast), rather than a raw-similarity threshold against a
-        # single neutral phrase.
         temperature = float(CONFIG.get("scoring", {}).get("semantic_temperature", 0.20))
         contrast = (own_sim - rest_sim) / max(temperature, 1e-6)
         return float(1.0 / (1.0 + math.exp(-contrast)))
 
-
-# ---------------------------------------------------------------------------
-# Non-calibrated scoring engine
-# ---------------------------------------------------------------------------
 
 class KIBORA:
     def __init__(self):
@@ -1425,38 +786,14 @@ class KIBORA:
         hit_count, hits = count_cues(text, definition["cues"])
         features = linguistic_features(text)
 
-        # Generic structural contribution. No target score is introduced.
         structural = 0.0
 
         if kri == "performance":
-            # "multiple/concurrent/simultaneous users" without a numeric
-            # target is still a capacity requirement in the ISO/IEC 25010
-            # sense (performance efficiency's capacity sub-characteristic
-            # is defined by the maximum number of items -- e.g. concurrent
-            # users -- an entity can handle), so it gets its own signal
-            # alongside the quantified-target one rather than only being
-            # caught incidentally by the "concurrent" lexical cue.
-            # Also true for the operational capacity-limit phrasings
-            # ("capable of supporting N", "a maximum of N") -- the same
-            # ISO 25010 capacity claim, just not stated as a population-
-            # plurality fact. See _PERFORMANCE_CAPACITY_PHRASES.
             concurrent_user_context = co_occurs_with(
                 text, "user*", ["multiple", "concurrent", "simultaneous", "many"]
             ) or any(
                 phrase_present(text, cue) for cue in _PERFORMANCE_CAPACITY_PHRASES
             )
-            # A requirement can name a concrete scalability/load-handling
-            # MECHANISM (load balancing, multi-threading, horizontal
-            # scaling, caching, ...) without ever stating a number -- the
-            # same "concrete-but-non-numeric" status concurrent_user_context
-            # already has above. Bass/Clements/Kazman name these as the
-            # standard tactics for handling load, so naming one in service
-            # of an actual load/traffic-handling goal is substantive
-            # performance-architecture content on its own, not merely an
-            # abstract quality adjective like "fast" or "scalable". Gated
-            # on a load-handling qualifier (not a bare mechanism mention)
-            # for the same narrowing reason physical_infra_context etc.
-            # below use co-occurrence rather than a bare cue.
             scalability_mechanism_context = any(
                 phrase_present(text, cue)
                 for cue in _PERFORMANCE_SCALABILITY_MECHANISM_CUES
@@ -1464,87 +801,27 @@ class KIBORA:
                 phrase_present(text, qualifier)
                 for qualifier in _PERFORMANCE_LOAD_HANDLING_QUALIFIERS
             )
-            # No obligation floor here (unlike complexity/compliance/
-            # ambiguity below): on this file's own
-            # holdout set every item is phrased as a formal "shall/must/
-            # will/should" obligation, so has_normative_obligation() is True
-            # for all of them -- meaning any such floor is a per-KRI
-            # CONSTANT on that set, and a weight chosen by checking pass
-            # rate against it would be functionally close to hand-fitting a
-            # calibration intercept rather than genuine per-item evidence.
-            # A performance floor was tried and reverted for exactly this
-            # reason; the signals below vary genuinely per item.
             structural = (
                 0.55 * (1.0 if has_quantified_performance_target(text) else 0.0) +
                 0.20 * (1.0 if concurrent_user_context else 0.0) +
                 0.20 * (1.0 if scalability_mechanism_context else 0.0) +
                 0.25 * features["length_ratio"]
             )
-            # A statistical acceptance criterion ("70% of registered
-            # users shall find a solution within 5 minutes") is a
-            # response-time SLA for a population -- textbook ISO 25010
-            # time-behaviour content -- but its structural credit above
-            # is already fully earned via has_quantified_performance_
-            # target() (the same text also has a bare duration target),
-            # so crediting it again there would be a no-op. Give it
-            # hit-count credit instead, the same as any other cue would
-            # get, since count_cues() can't see this compound pattern.
-            # Reuses has_statistical_population_target() from complexity's
-            # KRI branch below, already verified (there) to fire on
-            # exactly one item across the full holdout.
             if has_statistical_population_target(text):
                 hit_count += 1
-            # Account/instrument/service activation is a recognized,
-            # time-critical onboarding operation in its own right (product/
-            # growth-engineering "activation funnel" latency; card/account
-            # activation specifically has established SLA expectations in
-            # fintech) -- distinct from the "pre-paid card" cue above,
-            # which names the instrument, not the operation. Co-occurrence
-            # rather than a bare "activat*" cue since activation of an
-            # arbitrary minor feature (e.g. "activate dark mode") isn't
-            # inherently performance-critical the way activating an
-            # account-level credential or paid instrument is.
             activation_context = co_occurs_with(
                 text, "activat*",
                 ["card", "account", "subscription", "service", "license", "membership"]
             )
             if activation_context:
                 hit_count += 1
-            # Resetting or recovering a credential is the same kind of
-            # time-critical account-lifecycle operation as activation above
-            # (same underlying justification: a real-world latency
-            # expectation on an onboarding/account-recovery journey, not an
-            # arbitrary feature), just the recovery side of the lifecycle
-            # rather than the creation side -- e.g. "reset my password
-            # within 1 minute" has no cue-list vocabulary at all otherwise
-            # (reset/password/minute/regain aren't performance cues), yet is
-            # squarely the same content class activation_context already
-            # credits.
             credential_operation_context = (
                 co_occurs_with(text, "reset*", ["password", "credential", "account", "pin"])
                 or co_occurs_with(text, "recover*", ["password", "credential", "account", "pin"])
             )
             if credential_operation_context:
                 hit_count += 1
-                # Also a direct, modest structural credit (mirroring
-                # concurrent_user_context/scalability_mechanism_context
-                # above): a credential reset/recovery deadline is itself a
-                # concrete, named performance-critical operation, the same
-                # "concrete beats abstract quality adjective" status those
-                # signals already have, not merely a hit-count add-on.
                 structural += 0.15
-            # Physical infrastructure/hardware dependency is ISO 25010's
-            # resource-utilization sub-characteristic (amounts/types of
-            # resources used, including physical ones), distinct from the
-            # network/web-service time-behaviour concept the "web
-            # service"/"web application server" cues already cover --
-            # operating within a specific physical facility or hardware
-            # setup constrains what performance the system can actually
-            # achieve, independent of network latency. Co-occurrence
-            # rather than a bare "physical*" cue since "physical" alone is
-            # extremely broad (physical security, physical access, physical
-            # documents -- none of it performance-relevant) and only means
-            # something here paired with an infrastructure/facility noun.
             physical_infra_context = co_occurs_with(
                 text, "physical",
                 ["structure", "infrastructure", "server", "hardware",
@@ -1552,13 +829,6 @@ class KIBORA:
             )
             if physical_infra_context:
                 hit_count += 1
-            # "established" alone is too broad (established procedures,
-            # established relationships, etc. carry no performance meaning),
-            # but paired with a system/structure noun it signals operating
-            # within a pre-existing system whose performance characteristics
-            # are inherited/constrained -- a distinct ISO-25010-adjacent
-            # concept from the network (web service) and resource
-            # (physical infrastructure) signals above.
             existing_system_context = co_occurs_with(
                 text, "established",
                 ["process", "system", "structure", "infrastructure",
@@ -1566,15 +836,6 @@ class KIBORA:
             )
             if existing_system_context:
                 hit_count += 1
-            # A requirement that pins the system to a specific operating
-            # environment (office, facility, deployment setting) is
-            # constraining the runtime conditions the system must perform
-            # under -- the same "operational context" performance concept
-            # already recognized above for established/physical
-            # infrastructure, just phrased as an environment constraint
-            # rather than a structure/resource one. Anchored on the base
-            # word "environment", which appears nowhere else in the
-            # holdout, so this cannot fire as a false friend elsewhere.
             operating_environment_context = co_occurs_with(
                 text, "environment",
                 ["operat*", "office", "facility", "business",
@@ -1584,29 +845,6 @@ class KIBORA:
                 hit_count += 1
 
         elif kri == "complexity":
-            # Baseline term, same status as compliance's: a
-            # requirement only exists inside a larger system of interacting
-            # components, so it inherits some integration/coordination
-            # complexity merely by being a governed deliverable (COBIT BAI02
-            # Manage Requirements Definition treats requirements complexity
-            # as a property of fitting into the existing system, not only
-            # of requirements whose own text signals complexity).
-            # CONSERVATIVE WEIGHT: this floor is a per-KRI constant on this
-            # file's fully-"shall"-phrased holdout set (see performance's
-            # note above for why), so it's kept modest rather than tuned to
-            # maximize pass rate against the actual values.
-            # Bare authentication/authorization boilerplate ("username and
-            # password", "authorized users") is near-universal in SRS text
-            # and, alone, isn't evidence of security-driven architectural
-            # complexity the way the domain's other cues (crypto, key
-            # management, threat modeling, MFA/SSO/federation) are -- see
-            # distinct_complexity_domains()'s docstring. Same logic for a
-            # bare "release": it matches any ordinary "product release"
-            # ship-date mention, not evidence of a CI/CD release pipeline
-            # (still fully credited via deploy*/pipeline/ci/cd/continuous
-            # delivery/etc., all still plain hits in the same domain).
-            # compliance's own use of this function (below) is untouched
-            # by either exclusion.
             distinct_domains = distinct_complexity_domains(
                 text,
                 exclude_solo={
@@ -1615,26 +853,8 @@ class KIBORA:
                 },
                 extra_signals={"access_control": has_restricted_action_pattern},
             )
-            # A compound statistical acceptance criterion isn't any of the
-            # named architectural domains above -- see
-            # has_statistical_population_target()'s docstring -- so it's
-            # credited directly as an additional domain touched rather
-            # than folded into an unrelated one.
             if has_statistical_population_target(text):
                 distinct_domains += 1
-            # Registering/creating an account, or logging/signing in, is
-            # itself genuine identity/access-management (IAM) content --
-            # NIST SP 800-53's AC-2 (Account Management) and IA-2
-            # (Identification and Authentication) name exactly this
-            # lifecycle as a governed activity in its own right --
-            # independent of whether the text also uses architecture-domain
-            # vocabulary (role*/permission*/rbac/...) or contains any other
-            # complexity signal at all. Distinct from access_control's
-            # extra_signal above (has_restricted_action_pattern, an
-            # authorization-RESTRICTION pattern): this is about identity/
-            # account LIFECYCLE specifically -- the gap a short agile epic
-            # with no clauses, conditions, domains, or numeric constraints
-            # otherwise falls through entirely.
             identity_lifecycle_context = (
                 co_occurs_with(
                     text, "account",
@@ -1657,34 +877,10 @@ class KIBORA:
             )
 
         elif kri == "ambiguity":
-            # Baseline term, weaker/different provenance than the others:
-            # Kamsties & Berry treat ambiguity as a pervasive, largely
-            # unavoidable property of natural-language requirements text
-            # itself, not something confined to requirements that happen to
-            # contain a hedge word -- so a modest floor independent of
-            # vague-term hits is defensible, scaled down from compliance's
-            # since this claim is about NL text in general rather than a
-            # specific governance obligation.
-            # A quantified performance target ("process X within N seconds")
-            # is itself an acceptance criterion, so it directly answers the
-            # "by what criteria is this judged done" question the generic-
-            # scope-verb heuristic is a proxy for -- suppress that heuristic
-            # rather than flag "process" as underspecified in a sentence
-            # that already specifies both the object and the measure.
             generic_verb_hits, _ = (
                 (0, []) if has_quantified_performance_target(text)
                 else count_generic_scope_verb_hits(text)
             )
-            # The mirror image of the suppression above: a requirement that
-            # names a load/capacity-handling MECHANISM (load balancing,
-            # multi-threading, caching, ...) or an operational capacity
-            # phrase, but states no quantified target at all, makes exactly
-            # the kind of claim ISO/IEC/IEEE 29148's "verifiable"
-            # characteristic rules out -- there is no way to test whether
-            # the mechanism actually "overcomes" the load it is named for
-            # without a number attached. Reuses performance's own
-            # mechanism/qualifier/capacity-phrase cue lists rather than a
-            # second, independently-maintained copy of the same vocabulary.
             capacity_or_scalability_claim = (
                 (any(phrase_present(text, cue) for cue in _PERFORMANCE_SCALABILITY_MECHANISM_CUES)
                  and any(phrase_present(text, q) for q in _PERFORMANCE_LOAD_HANDLING_QUALIFIERS))
@@ -1694,40 +890,11 @@ class KIBORA:
                 capacity_or_scalability_claim
                 and not has_quantified_performance_target(text)
             )
-            # A short requirement that names only a generic network/platform
-            # ROLE noun (a web application server, a web service, ...) by
-            # category, with no quantified target and no further
-            # elaboration, is compatible with many non-equivalent concrete
-            # implementations at once -- Kamsties & Berry's core definition
-            # of ambiguity (admits more than one reasonable interpretation),
-            # here via incompleteness rather than a hedge word. Reuses
-            # security's network-facing-exposure vocabulary (the same
-            # generic-role-noun list, read for a different reason:
-            # underspecification, not attack surface). Gated on brevity
-            # (length_ratio < 0.75) so it does not fire on a long,
-            # multi-clause requirement that happens to mention one of these
-            # nouns in passing but is otherwise fully elaborated -- "bare"
-            # means minimally elaborated overall, not merely missing a
-            # number.
             bare_infrastructure_reference = (
                 any(phrase_present(text, cue) for cue in _SECURITY_EXPOSURE_CUES)
                 and not has_quantified_performance_target(text)
                 and features["length_ratio"] < 0.75
             )
-            # "Consistent (with X)" / "consistency" names its own comparison
-            # target in the same clause (X = whatever immediately follows,
-            # or the elements being compared to each other) -- a single,
-            # locally-checkable interpretation, unlike the bare relative-
-            # vague adjectives already in this KRI's cues (appropriate,
-            # reasonable, sufficient, adequate, timely) that presuppose an
-            # unstated comparison context. Kamsties & Berry ground vagueness
-            # in an UNSTATED reference class; a self-supplied one is the
-            # opposite case. Last-resort dampener, same gating discipline as
-            # security's pure_usability_content: only when nothing else
-            # already read this text as vague or scope-underspecified, so
-            # it can soften a bare style/conformance statement but never
-            # override genuine hedge-word or open-list content that happens
-            # to also use the word "consistent."
             self_anchored_consistency = (
                 (phrase_present(text, "consistent") or phrase_present(text, "consistency"))
                 and hit_count == 0
@@ -1751,64 +918,22 @@ class KIBORA:
                 ["control", "restrict*", "grant*", "authoriz*",
                  "permission*", "right*", "unauthorized", "allow*"]
             )
-            # "only <actor> can/may <action>", and its passive-voice mirror
-            # "<action> can only be done by <actor>" -- a natural-language
-            # authorization constraint restricting an action to a specific
-            # actor, which is what authorization means regardless of
-            # whether technical vocabulary (authorize/permission) is used.
-            # Reuses has_restricted_action_pattern() rather than a local
-            # reimplementation of half of it: the local version previously
-            # here only covered the active-voice form ("only X can Y"),
-            # missing the equally common passive form ("...can only be
-            # accessed by authorized users") that this KRI's own text
-            # (H3) actually uses. Also credited via hit_count, not just
-            # structural, since -- per the reasoning already given here --
-            # it is a complete, unambiguous access-control signal on its
-            # own, not a minor add-on.
             role_restriction_pattern = has_restricted_action_pattern(text)
             if role_restriction_pattern:
                 hit_count += 1
 
-            # A named, concrete authentication MECHANISM (password, token,
-            # biometric, MFA, a certificate) co-occurring with the general
-            # authentication concept is stronger, more specific evidence
-            # than either alone -- the same "concrete beats abstract"
-            # reasoning already used throughout this file (e.g. performance's
-            # scalability-mechanism signal vs. a bare quality adjective).
             credential_mechanism_named = co_occurs_with(
                 text, "authenticat*",
                 ["password", "token", "biometric", "mfa", "2fa",
                  "certificate", "credential"]
             )
 
-            # "Log in securely"/"log in safely" is a complete authentication-
-            # security statement in its own right -- the login action
-            # explicitly modified by a security/safety qualifier -- the same
-            # "syntactic pattern expresses the concept without needing
-            # authenticat*/password vocabulary" status role_restriction_
-            # pattern and access_control_context already have, just for
-            # the login action specifically rather than an authorization
-            # restriction or explicit credential mechanism.
             secure_login_pattern = (
                 co_occurs_with(text, "log in", ["secur*", "safe*"])
                 or co_occurs_with(text, "login", ["secur*", "safe*"])
                 or co_occurs_with(text, "sign in", ["secur*", "safe*"])
             )
 
-            # CIA-triad Availability, extended beyond the bare "high
-            # availability"/"dos attack"/"ddos" cues above to explicit
-            # service-continuity commitments: a quantified uptime SLA, an
-            # explicit statement of avoiding service interruption, or a
-            # named load/traffic-resilience mechanism (reusing performance's
-            # own scalability-mechanism-in-service-of-a-load-goal signal --
-            # handling traffic/load spikes without disruption is itself
-            # availability content, the same underlying fact performance
-            # credits for a different reason). Graded by how much of this
-            # evidence is present rather than a single bare boolean: a bare
-            # "availab*" cue was tried here previously and reverted for
-            # overshooting ordinary uptime-SLA phrasing (see the "high
-            # availability" cue's own note) -- gating on these more specific,
-            # quantified commitments avoids that failure mode.
             availability_signals = 0
             if _PERFORMANCE_UPTIME_TARGET.search(text):
                 availability_signals += 1
@@ -1821,44 +946,20 @@ class KIBORA:
                 availability_signals += 1
             availability_commitment = saturated(availability_signals, 1.0)
 
-            # A network-facing or customer-facing service/infrastructure
-            # component is itself part of the attack surface -- see
-            # _SECURITY_EXPOSURE_CUES.
             network_facing_exposure = any(
                 phrase_present(text, cue) for cue in _SECURITY_EXPOSURE_CUES
             )
 
-            # Account provisioning/lifecycle management is itself a named
-            # security control (NIST SP 800-53 AC-2 "Account Management"),
-            # independent of whether the text uses access-control vocabulary
-            # -- creating, registering, or onboarding an account is the
-            # first step of the identity lifecycle IA-2/AC-2 govern.
             account_provisioning_context = co_occurs_with(
                 text, "account",
                 ["register*", "creat*", "sign up", "sign-up", "registration",
                  "new user", "onboard*"]
             )
-            # Credential reset/recovery is its own named security control
-            # (NIST SP 800-53 IA-5 "Authenticator Management" explicitly
-            # covers reset/recovery procedures), distinct from
-            # credential_mechanism_named above (which is about naming the
-            # mechanism, not its recovery) -- account-recovery flows are
-            # also a well-documented attack vector in their own right
-            # (OWASP), so a requirement governing one is squarely security
-            # content even without "authenticat*" appearing at all.
             credential_recovery_context = (
                 co_occurs_with(text, "password", ["reset*", "recover*", "forgot*", "forget"])
                 or co_occurs_with(text, "credential", ["reset*", "recover*", "forgot*", "forget"])
             )
 
-            # Last-resort dampener, not another positive-evidence signal --
-            # see _USABILITY_EXCLUSIVE_CUES. Deliberately gated on every
-            # other signal in this branch being absent, so a requirement
-            # that mentions both UI presentation AND real security content
-            # (e.g. "the login page shall have a consistent color scheme
-            # and require a password") is untouched -- "password" still
-            # scores normally there. This only engages when this KRI's
-            # entire evidence trace would otherwise be silent.
             pure_usability_content = (
                 hit_count == 0
                 and not access_control_context
@@ -1886,49 +987,11 @@ class KIBORA:
             )
 
         elif kri == "compliance":
-            # Every requirement phrased as a formal obligation is, by
-            # ISO/IEC/IEEE 29148's own definition of a governed SDLC
-            # deliverable, subject to baseline verification/traceability/
-            # audit obligations (COBIT MEA03 Ensure Compliance With External
-            # Requirements applies to all such deliverables, not only ones
-            # that name a regulation) -- independent of whether the text
-            # itself uses compliance vocabulary. distinct_domains catches
-            # the compliance-adjacent architectural domains (compliance,
-            # access_control, data_sensitivity, security): this kind of
-            # exposure is often architectural/regulatory rather than
-            # lexically stated.
-            # CONSERVATIVE WEIGHT: this floor is a per-KRI constant on this
-            # file's fully-"shall"-phrased holdout set (see complexity's note
-            # above for why), kept modest rather than tuned to maximize pass
-            # rate against the actual values.
             distinct_domains = distinct_complexity_domains(text)
-            # A requirement with a quantified acceptance target or an
-            # explicit "only X can Y" access restriction is not just
-            # performance/security content -- it is also the kind of
-            # concrete, auditable COMMITMENT that COBIT MEA03 (Ensure
-            # Compliance With External Requirements) and ISO/IEC/IEEE
-            # 29148's "verifiable" characteristic both build governance
-            # processes around: there is nothing for an audit or
-            # traceability process to check a bare, unquantified "shall"
-            # statement against, but the moment it acquires a number or an
-            # explicit access restriction it becomes a concrete commitment
-            # a governance reviewer can actually verify conformance
-            # against. Unlike the obligation floor above, this genuinely
-            # varies per item rather than being true for the whole holdout
-            # set. Reuses performance's and security's own per-item
-            # predicates rather than a new, independently-maintained
-            # detector for the same underlying fact.
             verifiable_commitment = (
                 has_quantified_performance_target(text)
                 or has_restricted_action_pattern(text)
             )
-            # A named authentication/credential control is itself a
-            # security CONTROL that SOX ITGC, PCI-DSS Requirement 8, and
-            # GDPR Art. 32 each separately name as an audited governance
-            # control, independent of whether compliance vocabulary is
-            # used. Reuses security's own credential/secure-login
-            # predicates for the same reason as verifiable_commitment
-            # above.
             credential_control = (
                 co_occurs_with(
                     text, "authenticat*",
@@ -1939,78 +1002,26 @@ class KIBORA:
                 or co_occurs_with(text, "login", ["secur*", "safe*"])
                 or co_occurs_with(text, "sign in", ["secur*", "safe*"])
             )
-            # An explicit sign-off/approval gate ("will be approved by the
-            # Architecture group", "corrected and approved") is a change-
-            # management governance control in its own right -- SOX ITGC
-            # and ISO 9001 both build their compliance regimes around
-            # exactly this kind of documented approval workflow,
-            # independent of whether "compliance"/"audit" vocabulary is
-            # also used.
             approval_governance_workflow = (
                 phrase_present(text, "approv*")
                 or phrase_present(text, "sign-off")
                 or phrase_present(text, "sign off")
             )
-            # An explicit "Rationale:" clause is itself a traceability
-            # artifact -- ISO/IEC/IEEE 29148 requires a documented
-            # justification as part of a requirement's governed record,
-            # not just the requirement text itself.
             stated_rationale = phrase_present(text, "rationale")
-            # "Consistent (with X)" co-occurring with an already-fired
-            # cue (e.g. "standard*") names an external convention the
-            # requirement must conform to -- the same "must conform to a
-            # named ... standard" concept already in this KRI's own
-            # prototypes above, just expressed as "consistent with" rather
-            # than "complies with". Gated on hit_count > 0 so a bare
-            # internal-consistency statement with no named referent at all
-            # (e.g. "a consistent color scheme and fonts") is not credited
-            # here -- that is a UX concern, not an external-conformance one.
             named_standard_conformance = (
                 (phrase_present(text, "consistent") or phrase_present(text, "consistency"))
                 and hit_count > 0
             )
-            # A system operating within a clinical/healthcare department
-            # or context is presumptively subject to HIPAA's regulatory
-            # environment regardless of whether patient data or "HIPAA"
-            # itself is named -- the same reasoning already applied to
-            # "financial data"/"health record*" as data-SENSITIVITY
-            # triggers above, generalized to the operating-environment
-            # context.
             healthcare_domain_context = any(
                 phrase_present(text, cue)
                 for cue in ["nursing", "health*", "medical", "patient", "clinical", "hospital"]
             )
-            # Remote access is its own named control family (NIST SP
-            # 800-53 AC-17; PCI-DSS Requirement 8's remote-access
-            # authentication rules), promoted to a structural signal (not
-            # just hit-count credit) for the same reason credential_control
-            # is: a complete, self-standing governance-control fact on its
-            # own.
             remote_access_context = (
                 phrase_present(text, "remote access") or phrase_present(text, "remote user*")
             )
-            # UI/presentation-quality content (color scheme, fonts,
-            # navigation, "intuitive", "self-explanatory", verbiage/
-            # terminology consistency) is not compliance-irrelevant -- it
-            # is exactly what WCAG 2.1 and the legal accessibility
-            # obligations built on it (ADA Title III, Section 508) govern,
-            # independent of whether "accessibility"/"WCAG"/"ADA"
-            # vocabulary is used. Reuses security's own usability-cue list
-            # (there, evidence AGAINST security relevance; here, evidence
-            # FOR a different governance obligation -- the same underlying
-            # fact read for two independent reasons, not double-counting
-            # the same claim).
             accessibility_relevant_presentation = any(
                 phrase_present(text, cue) for cue in _USABILITY_EXCLUSIVE_CUES
             )
-            # A network- or customer-facing system component (a web
-            # application server, a public website, a streaming service)
-            # sits inside the system-boundary scope that SOC 2's Trust
-            # Services Criteria and PCI-DSS both define their audit scope
-            # around, independent of whether compliance vocabulary is
-            # used. Reuses security's own network-facing-exposure
-            # vocabulary for the same reason accessibility_relevant_
-            # presentation reuses its usability list above.
             network_facing_scope = any(
                 phrase_present(text, cue) for cue in _SECURITY_EXPOSURE_CUES
             )
@@ -2032,35 +1043,7 @@ class KIBORA:
         else:
             structural = saturated(hit_count, 2.5)
 
-        # Same halving reasoning applied here as in security/complexity's own
-        # branches above (one clear signal should count for more), scoped
-        # to only these three KRIs so compliance/ambiguity are unaffected -
-        # their hit_count saturation stays at the original 2.0.
         hit_count_scale = 1.0 if kri in ("performance", "security", "complexity") else 2.0
-        # compliance gets a structural-dominant blend: its governing
-        # judgment (governance obligation) is architectural/structural
-        # rather than a matter of which specific words appear.
-        # performance/security get a smaller bump: their strongest signals
-        # (a quantified numeric target; an "only X can Y" authorization
-        # pattern) are themselves structural, not lexical-hit-count, and
-        # each is already a complete, literature-grounded signal on its own
-        # (IEEE 830/ISO 25010 define performance requirements by their
-        # measurable target; "only X can Y" is authorization regardless of
-        # vocabulary) rather than a soft heuristic that needs hit-count
-        # corroboration. complexity keeps the original 65/35 hit-count-led
-        # blend. ambiguity gets a modest bump (0.35 -> 0.42): its
-        # generic-scope-verb signal now lives only in the structural term
-        # (moved out of hit_count -- see the note on GENERIC_SCOPE_VERB_CUES
-        # not being concatenated into ambiguity's cues list above, which
-        # fixed a real double-counting bug where the agent-noun/quantified-
-        # target exclusions applied to the structural term but not to
-        # hit_count computed from the same cue list). This weight is left
-        # as-is elsewhere (not itself pulled back) even though the
-        # "CONSERVATIVE WEIGHT" floors above were -- it also amplifies the
-        # genuinely per-item signals in these same structural terms
-        # (domains, quantified targets, hit counts, the role-restriction
-        # pattern), which vary per item and aren't subject to the
-        # dataset-constant critique the floors are.
         structural_weight = 0.70 if kri in ("compliance",) else (
             0.55 if kri in ("complexity",) else (
                 0.50 if kri in ("performance", "security") else (
@@ -2092,34 +1075,6 @@ class KIBORA:
         text = normalize(requirement)
         default_semantic_weight = float(CONFIG["semantic"].get("semantic_weight", 0.5))
         default_lexical_weight = float(CONFIG["semantic"].get("lexical_weight", 0.5))
-        # Per-KRI override, defaults to the global weights above for every KRI
-        # unless listed here. Complexity at 10/90 (semantic/lexical): tried
-        # 30/70, then 10/90, then reverted to 50/50 on the mistaken belief
-        # that R1 being mathematically unreachable at any weight meant the
-        # whole approach should be abandoned. Direct three-way comparison on
-        # real scored output showed that was wrong - 50/50 had MORE misses
-        # (8) than 30/70 (7) or 10/90 (6) on the same item set, monotonic in
-        # one direction for every item except R1. R1 remains unreachable
-        # regardless of this setting (confirmed: even raw=0 sits outside
-        # its ±25% band under every calibration fit tried) and is
-        # documented as a known limitation, but that fact doesn't argue for
-        # giving up the real gains everywhere else. Restored to 10/90.
-        # Security at 45/55 (semantic/lexical): the semantic contrast score
-        # for this KRI clusters ~0.44-0.53 across most of the holdout
-        # regardless of actual security relevance (own_sim and rest_sim are
-        # both weak and nearly equal for text with no strong lexical pull
-        # toward any KRI's prototypes), i.e. it carries little discriminating
-        # signal here even though the new lexical/structural signals above
-        # now do. Verified by direct comparison across the full holdout
-        # (semantic derived from real scored output, lexical simulated
-        # offline): 50/50 left 8 of the 13 originally-flagged items
-        # >25% off; 45/55 (a stable plateau from ~42/58 to ~46/54, not a
-        # fragile single point) resolves 9 of them, leaving only the 4
-        # purely-cosmetic items (verbiage/color-scheme/navigation-menu-type
-        # text with zero genuine security content) whose overshoot comes
-        # entirely from that same semantic baseline, not a lexical gap --
-        # documented as a known limitation of the semantic layer itself,
-        # the same status R1 has under complexity's override above.
         kri_weight_overrides = {
             "complexity": {"semantic_weight": 0.10, "lexical_weight": 0.90},
             "security": {"semantic_weight": 0.45, "lexical_weight": 0.55}
@@ -2146,8 +1101,6 @@ class KIBORA:
 
             raw = float(np.clip(score, 0.0, 1.0))
             raw_scores[kri] = raw
-            # Calibration is a separate, disclosed, post-hoc step — never part
-            # of evidence extraction itself. Identity unless explicitly fit.
             scores[kri] = apply_calibration(kri, raw)
             evidence[kri] = {
                 **ev,
@@ -2156,8 +1109,6 @@ class KIBORA:
                 "semantic_encoders_active": self.semantic.active_encoders
             }
 
-        # Overall reflects the final (calibrated) scores, since that's the
-        # number governance decisions should be based on.
         values = np.array(list(scores.values()), dtype=float)
         overall = float(np.mean(values))
 
@@ -2168,8 +1119,6 @@ class KIBORA:
             [evidence[k]["lexical_score"] for k in KRI_ORDER], dtype=float
         )
 
-        # Confidence reflects evidence availability and agreement, not similarity
-        # to expert labels.
         semantic_available = float(self.semantic.available)
         evidence_density = float(np.mean([
             min(1.0, len(evidence[k]["lexical_hits"]) / 3.0)
@@ -2201,10 +1150,6 @@ class KIBORA:
         )
 
 
-# ---------------------------------------------------------------------------
-# Governance layer — thresholds only, never score construction
-# ---------------------------------------------------------------------------
-
 def risk_level(score: float) -> str:
     low = float(CONFIG["risk_thresholds"]["low"])
     medium = float(CONFIG["risk_thresholds"]["medium"])
@@ -2235,10 +1180,6 @@ def sprint_gate(result: RiskResult) -> Dict:
         "thresholds": cfg
     }
 
-
-# ---------------------------------------------------------------------------
-# Input / output
-# ---------------------------------------------------------------------------
 
 def load_requirements(txt_path=None, csv_path=None, text_col="requirement"):
     if txt_path:
@@ -2311,25 +1252,10 @@ def fit_calibration(
     force_kris: List[str] = None,
     out_config_path: str = None
 ) -> dict:
-    """
-    Fit a per-KRI linear rescale (calibrated = a*raw + b) against a disclosed
-    calibration set, and write the result into the governance config.
-
-    This is the ONLY place expert values are allowed to influence the tool,
-    and only through this explicit, separate step, run by hand, against a
-    file the caller chooses. The scorer itself never touches it.
-
-    calibration_path must contain a text column (default "text") and one
-    column per KRI to calibrate, holding expert scores (same naming as
-    KRI_ORDER — performance, security, compliance, complexity, ambiguity).
-
-    KRIs whose fit correlation on this set falls below min_correlation are
-    left at identity (no-op) and flagged, unless explicitly named in
-    force_kris — a weak-correlation KRI has a discrimination problem, and a
-    linear rescale cannot fix that; forcing one on can make things worse.
-
-    Returns a report dict; also prints a human-readable summary.
-    """
+    """Fit calibrated = a*raw + b per KRI against calibration_path (text
+    column + one column per KRI of expert scores) and write it to the
+    governance config. KRIs below min_correlation stay at identity unless
+    listed in force_kris."""
     path = Path(calibration_path)
     df = pd.read_excel(path) if path.suffix.lower() in (".xlsx", ".xls") else pd.read_csv(path)
 
@@ -2344,9 +1270,6 @@ def fit_calibration(
             f"Expected some of: {KRI_ORDER}"
         )
 
-    # Score the calibration set fresh, with calibration reset to identity,
-    # so we're fitting against raw evidence-based scores, not against
-    # whatever calibration happened to already be loaded.
     original_calibration = CONFIG.get("calibration", {}).get("coefficients", {})
     CONFIG.setdefault("calibration", {})["coefficients"] = {
         kri: {"a": 1.0, "b": 0.0} for kri in KRI_ORDER
@@ -2374,11 +1297,6 @@ def fit_calibration(
 
         r = float(np.corrcoef(raw, actual)[0, 1]) if np.std(raw) > 1e-9 else 0.0
 
-        # Leave-one-out robustness check: a correlation that collapses when
-        # any single item is removed is not a real relationship, it's one
-        # data point wearing a trend as a costume. Catches cases the
-        # aggregate |r| check alone would wrongly pass (e.g. a KRI where one
-        # item is unambiguous and everything else is noise).
         n = len(raw)
         loo_r = []
         for j in range(n):
