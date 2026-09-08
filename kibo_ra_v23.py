@@ -33,6 +33,12 @@ except Exception:
     models = None
     util = None
 
+try:
+    import matplotlib.pyplot as plt
+    plt.switch_backend("Agg")
+except Exception:
+    plt = None
+
 
 BASE_DIR = Path(__file__).resolve().parent
 CONFIG_FILE = BASE_DIR / "governance_config_v23.json"
@@ -512,12 +518,155 @@ KRI_ORDER = list(KRI_DEFINITIONS)
 
 
 KRI_COBIT_MAPPING = {
-    "performance": ["BAI04_Manage Availability and Capacity", "DSS01_Manage Operations"],
-    "security": ["APO13_Manage Security", "DSS05_Manage Security Services"],
-    "compliance": ["MEA03_Ensure Compliance With External Requirements", "EDM03_Ensure Risk Optimization"],
-    "complexity": ["BAI02_Manage Requirements Definition", "BAI03_Manage Solutions Identification and Build"],
-    "ambiguity": ["BAI02_Manage Requirements Definition", "APO11_Manage Quality"]
+    "performance": {
+        "name": "Performance & Capacity Risk",
+        "primary": ["BAI04_Capacity", "DSS01_Services"],
+        "secondary": ["APO09_SLAs", "MEA01_Performance", "APO02_Architecture"],
+        "justification": "Performance constraints are contractual and architectural commitments once requirements are approved."
+    },
+    "security": {
+        "name": "Security Control Exposure",
+        "primary": ["APO13_Security", "DSS05_Security"],
+        "secondary": ["APO03_Risk", "MEA02_Controls", "DSS01_Services"],
+        "justification": "Security exposure must be identified at requirement level, not deferred to implementation controls."
+    },
+    "compliance": {
+        "name": "Compliance & Regulatory Risk",
+        "primary": ["MEA03_Compliance"],
+        "secondary": ["APO01_Strategy", "APO03_Risk", "DSS06_BPServices", "EDM03_Risk"],
+        "justification": "Non-compliant requirements create governance violations before development begins."
+    },
+    "complexity": {
+        "name": "Requirement Complexity Risk",
+        "primary": ["BAI02_Requirements", "BAI03_Solutions"],
+        "secondary": ["APO02_Architecture", "APO05_Portfolio", "BAI01_Programmes"],
+        "justification": "Excessive complexity propagates architectural debt, delivery risk, and coordination overhead across build activities."
+    },
+    "ambiguity": {
+        "name": "Requirement Ambiguity Risk",
+        "primary": ["BAI02_Requirements"],
+        "secondary": ["APO11_Quality", "APO01_Strategy", "MEA01_Performance", "MEA02_Controls"],
+        "justification": "Ambiguous requirements violate requirement definition quality, impair traceability, and undermine control effectiveness before build starts."
+    }
 }
+
+COBIT_OBJECTIVES = {
+    "EDM03_Risk": {"domain": "Governance (EDM)", "title": "Ensure Risk Optimization"},
+    "APO01_Strategy": {"domain": "Align, Plan, Organize (APO)", "title": "Manage Strategy"},
+    "APO02_Architecture": {"domain": "Align, Plan, Organize (APO)", "title": "Manage Enterprise Architecture"},
+    "APO03_Risk": {"domain": "Align, Plan, Organize (APO)", "title": "Manage IT Risk"},
+    "APO05_Portfolio": {"domain": "Align, Plan, Organize (APO)", "title": "Manage Portfolio"},
+    "APO09_SLAs": {"domain": "Align, Plan, Organize (APO)", "title": "Manage Service Agreements"},
+    "APO11_Quality": {"domain": "Align, Plan, Organize (APO)", "title": "Manage Quality"},
+    "APO13_Security": {"domain": "Align, Plan, Organize (APO)", "title": "Manage Security"},
+    "BAI01_Programmes": {"domain": "Build, Acquire, Implement (BAI)", "title": "Manage Programmes and Portfolios"},
+    "BAI02_Requirements": {"domain": "Build, Acquire, Implement (BAI)", "title": "Manage Requirements Definition"},
+    "BAI03_Solutions": {"domain": "Build, Acquire, Implement (BAI)", "title": "Manage Solutions Identification and Build"},
+    "BAI04_Capacity": {"domain": "Build, Acquire, Implement (BAI)", "title": "Manage Availability and Capacity"},
+    "DSS01_Services": {"domain": "Deliver, Service, Support (DSS)", "title": "Manage Services Definition and Delivery"},
+    "DSS05_Security": {"domain": "Deliver, Service, Support (DSS)", "title": "Manage IT Security"},
+    "DSS06_BPServices": {"domain": "Deliver, Service, Support (DSS)", "title": "Manage Business Process Services"},
+    "MEA01_Performance": {"domain": "Monitor, Evaluate, Assess (MEA)", "title": "Monitor, Measure and Assess IT Performance"},
+    "MEA02_Controls": {"domain": "Monitor, Evaluate, Assess (MEA)", "title": "Monitor and Evaluate Internal Control"},
+    "MEA03_Compliance": {"domain": "Monitor, Evaluate, Assess (MEA)", "title": "Ensure Regulatory Compliance"}
+}
+
+
+def _cobit_signals(scores: Dict[str, float]) -> Dict[str, str]:
+    signals = {}
+    for kri, cfg in KRI_COBIT_MAPPING.items():
+        if kri not in scores:
+            continue
+        level = risk_level(scores[kri])
+        for obj in cfg["primary"]:
+            signals.setdefault(obj, "OK")
+            if level in ("MEDIUM", "HIGH"):
+                if signals[obj] == "OK":
+                    signals[obj] = "REVIEW" if level == "MEDIUM" else "AT_RISK"
+                elif signals[obj] == "REVIEW" and level == "HIGH":
+                    signals[obj] = "AT_RISK"
+        for obj in cfg["secondary"]:
+            signals.setdefault(obj, "OK")
+            if level == "HIGH":
+                if signals[obj] == "OK":
+                    signals[obj] = "REVIEW"
+                elif signals[obj] == "REVIEW":
+                    signals[obj] = "AT_RISK"
+    return signals
+
+
+def save_governance_signals(
+    results: List["RiskResult"], req_ids: List[str], json_path: str, csv_path: str
+) -> None:
+    per_req = {rid: _cobit_signals(r.scores) for rid, r in zip(req_ids, results)}
+    all_objectives = sorted({obj for s in per_req.values() for obj in s})
+
+    report = {
+        "timestamp": datetime.now().isoformat(),
+        "total_requirements": len(results),
+        "kri_cobit_mapping": KRI_COBIT_MAPPING,
+        "objectives_reference": COBIT_OBJECTIVES,
+        "requirement_signals": {
+            rid: {
+                obj: {"status": st, "objective": COBIT_OBJECTIVES.get(obj, {}).get("title", "Unknown")}
+                for obj, st in signals.items()
+            }
+            for rid, signals in per_req.items()
+        },
+        "objective_summary": {}
+    }
+
+    rows = []
+    for obj in all_objectives:
+        statuses = [per_req[rid].get(obj, "OK") for rid in req_ids]
+        at_risk = statuses.count("AT_RISK")
+        review = statuses.count("REVIEW")
+        lineage = [
+            f"{cfg['name']} ({'PRIMARY' if obj in cfg['primary'] else 'SECONDARY'})"
+            for cfg in KRI_COBIT_MAPPING.values()
+            if obj in cfg["primary"] or obj in cfg["secondary"]
+        ]
+        report["objective_summary"][obj] = {
+            "title": COBIT_OBJECTIVES.get(obj, {}).get("title", "Unknown"),
+            "domain": COBIT_OBJECTIVES.get(obj, {}).get("domain", "Unknown"),
+            "ok_count": statuses.count("OK"),
+            "review_count": review,
+            "at_risk_count": at_risk,
+            "overall_status": "AT_RISK" if at_risk else ("REVIEW" if review else "OK"),
+            "affected_requirements": [rid for rid in req_ids if per_req[rid].get(obj) != "OK"],
+            "kri_lineage": lineage
+        }
+        rows.append({
+            "COBIT_Objective": obj,
+            "Domain": COBIT_OBJECTIVES.get(obj, {}).get("domain", "Unknown"),
+            "Title": COBIT_OBJECTIVES.get(obj, {}).get("title", "Unknown"),
+            **{rid: per_req[rid].get(obj, "OK") for rid in req_ids},
+            "Status_Summary": f"{at_risk} AT_RISK, {review} REVIEW",
+            "KRI_Lineage": "; ".join(lineage) if lineage else "None"
+        })
+
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(report, f, indent=2)
+    pd.DataFrame(rows).to_csv(csv_path, index=False)
+
+
+def save_heatmap(df: pd.DataFrame, path: str) -> None:
+    if plt is None:
+        print("matplotlib not available, skipping heatmap")
+        return
+    cols = [k for k in KRI_ORDER if k in df.columns]
+    scores = df[cols].values
+    plt.figure(figsize=(10, max(6, len(df) * 0.4)))
+    im = plt.imshow(scores, aspect="auto", cmap="coolwarm", vmin=0, vmax=1)
+    plt.colorbar(im, label="Risk Score")
+    plt.xticks(range(len(cols)), [c.upper() for c in cols], rotation=45, ha="right")
+    plt.yticks(range(len(df)), df["requirement"].tolist())
+    for i in range(scores.shape[0]):
+        for j in range(scores.shape[1]):
+            plt.text(j, i, f"{scores[i, j]:.2f}", ha="center", va="center", fontsize=8)
+    plt.tight_layout()
+    plt.savefig(path, dpi=200)
+    plt.close()
 
 
 @dataclass
@@ -1214,8 +1363,7 @@ def results_dataframe(results: List[RiskResult]) -> pd.DataFrame:
             "text": r.requirement,
             **r.scores,
             "overall": r.overall,
-            "confidence": r.confidence,
-            **{f"raw_{k}": v for k, v in r.raw_scores.items()}
+            "confidence": r.confidence
         }
         rows.append(row)
     return pd.DataFrame(rows)
@@ -1419,15 +1567,26 @@ def main():
     auditor = KIBORA()
     results = [auditor.assess(r) for r in requirements]
 
-    prefix = args.out_prefix or str(
-        BASE_DIR / f"kibo_ra_v2_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    )
+    run_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    base_prefix = args.out_prefix or str(BASE_DIR / "kibo_ra_v23")
+    prefix = f"{base_prefix}_{run_ts}"
 
-    outputs = save_outputs(results, prefix)
+    outputs = list(save_outputs(results, prefix))
+
+    df = results_dataframe(results)
+    req_ids = df["requirement"].tolist()
+    cobit_json = f"{prefix}_cobit_signals.json"
+    cobit_csv = f"{prefix}_cobit_matrix.csv"
+    save_governance_signals(results, req_ids, cobit_json, cobit_csv)
+    outputs += [cobit_json, cobit_csv]
+
+    heatmap_path = f"{prefix}_heatmap.png"
+    save_heatmap(df, heatmap_path)
+    outputs.append(heatmap_path)
 
     print(f"Assessment time: {time.time() - t0:.1f}s")
     print("\nFirst results:")
-    print(results_dataframe(results).head().to_string(index=False))
+    print(df.head().to_string(index=False))
     print("\nOutputs:")
     for p in outputs:
         print(p)
