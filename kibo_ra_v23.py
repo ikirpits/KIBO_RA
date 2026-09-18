@@ -1,12 +1,5 @@
 
-"""
-KIBO-RA v2 - Requirements Auditor
-
-Scores requirements text on five KRIs (performance, security, compliance,
-complexity, ambiguity) from lexical + semantic evidence. Calibration is a
-separate, optional post-hoc rescale fit by fit_calibration(); raw and
-calibrated scores are both kept in the output.
-"""
+"""KIBO-RA v2 - Requirements Auditor"""
 
 from __future__ import annotations
 
@@ -68,16 +61,6 @@ DEFAULT_CONFIG = {
         "semantic_weight": 0.50,
         "evidence_weight": 0.30,
         "agreement_weight": 0.20
-    },
-    "calibration": {
-        "fitted_on": None,
-        "fitted_at": None,
-        "coefficients": {
-            kri: {"a": 1.0, "b": 0.0} for kri in [
-                "performance", "security",
-                "compliance", "complexity", "ambiguity"
-            ]
-        }
     }
 }
 
@@ -254,9 +237,6 @@ def distinct_complexity_domains(
     exclude_solo: Optional[Dict[str, set]] = None,
     extra_signals: Optional[Dict[str, Callable[[str], bool]]] = None,
 ) -> int:
-    """Count distinct architectural domains this text touches. `exclude_solo`
-    lists weak cues that don't count alone per domain; `extra_signals` adds a
-    non-word-list predicate per domain."""
     exclude_solo = exclude_solo or {}
     extra_signals = extra_signals or {}
     count = 0
@@ -673,19 +653,10 @@ def save_heatmap(df: pd.DataFrame, path: str) -> None:
 class RiskResult:
     requirement: str
     scores: Dict[str, float]
-    raw_scores: Dict[str, float]
     confidence: float
     overall: float
     evidence: Dict[str, Dict]
     cobit_alignment: Dict[str, List[str]]
-
-
-def apply_calibration(kri: str, raw_score: float) -> float:
-    """Post-hoc linear rescale, identity unless fit_calibration() has run."""
-    coeffs = CONFIG.get("calibration", {}).get("coefficients", {}).get(kri, {})
-    a = float(coeffs.get("a", 1.0))
-    b = float(coeffs.get("b", 0.0))
-    return float(np.clip(a * raw_score + b, 0.0, 1.0))
 
 
 def normalize(text: str) -> str:
@@ -714,7 +685,6 @@ def phrase_present(text: str, phrase: str) -> bool:
 
 
 def co_occurs_with(text: str, base: str, qualifiers: List[str]) -> bool:
-    """True if `base` and any of `qualifiers` both appear in text."""
     if not phrase_present(text, base):
         return False
     return any(phrase_present(text, q) for q in qualifiers)
@@ -737,7 +707,6 @@ _PERFORMANCE_CLOCK_TIME = re.compile(
 
 
 def has_quantified_performance_target(text: str) -> bool:
-    """Number + time/capacity unit, uptime-SLA idiom, or a clock-time range."""
     return bool(
         _PERFORMANCE_QUANTIFIED_TARGET.search(text)
         or _PERFORMANCE_UPTIME_TARGET.search(text)
@@ -752,7 +721,6 @@ _NORMATIVE_OBLIGATION = re.compile(
 
 
 def has_normative_obligation(text: str) -> bool:
-    """True if text uses shall/must/will/should phrasing."""
     return bool(_NORMATIVE_OBLIGATION.search(text))
 
 
@@ -809,17 +777,12 @@ def linguistic_features(text: str) -> Dict[str, float]:
 
 
 def saturated(value: float, scale: float = 2.5) -> float:
-    """Monotonic evidence saturation. 0 -> 0 and increasing evidence -> asymptote 1."""
     if value <= 0:
         return 0.0
     return 1.0 - math.exp(-value / max(scale, 1e-9))
 
 
 class SemanticEngine:
-    """Hybrid SBERT + BERT4RE sentence embedding, unit-normalized and
-    weight-concatenated. Degrades to whichever encoder loaded; 0.0 if
-    neither does."""
-
     def __init__(self):
         semantic_cfg = CONFIG.get("semantic", {})
         self.enabled = bool(semantic_cfg.get("enabled", True))
@@ -874,7 +837,6 @@ class SemanticEngine:
         return bool(self.active_encoders)
 
     def encode(self, texts):
-        """Hybrid embedding across whichever encoder(s) loaded."""
         sbert_vecs = (
             self.sbert.encode(texts, convert_to_tensor=True, normalize_embeddings=True)
             if self.sbert is not None else None
@@ -1229,7 +1191,6 @@ class KIBORA:
             "security": {"semantic_weight": 0.45, "lexical_weight": 0.55}
         }
 
-        raw_scores = {}
         scores = {}
         evidence = {}
 
@@ -1248,9 +1209,7 @@ class KIBORA:
                 score = semantic_weight * semantic + lexical_weight * lexical
                 agreement = 1.0 - abs(semantic - lexical)
 
-            raw = float(np.clip(score, 0.0, 1.0))
-            raw_scores[kri] = raw
-            scores[kri] = apply_calibration(kri, raw)
+            scores[kri] = float(np.clip(score, 0.0, 1.0))
             evidence[kri] = {
                 **ev,
                 "semantic_score": round(float(semantic), 6),
@@ -1291,7 +1250,6 @@ class KIBORA:
         return RiskResult(
             requirement=requirement,
             scores=scores,
-            raw_scores=raw_scores,
             confidence=confidence,
             overall=overall,
             evidence=evidence,
@@ -1393,166 +1351,15 @@ def save_outputs(results: List[RiskResult], prefix: str):
     return xlsx, csv_out, json_out
 
 
-def fit_calibration(
-    calibration_path: str,
-    text_col: str = "text",
-    min_correlation: float = 0.40,
-    force_kris: List[str] = None,
-    out_config_path: str = None
-) -> dict:
-    """Fit calibrated = a*raw + b per KRI against calibration_path (text
-    column + one column per KRI of expert scores) and write it to the
-    governance config. KRIs below min_correlation stay at identity unless
-    listed in force_kris."""
-    path = Path(calibration_path)
-    df = pd.read_excel(path) if path.suffix.lower() in (".xlsx", ".xls") else pd.read_csv(path)
-
-    if text_col not in df.columns:
-        raise ValueError(f"'{text_col}' column not found in {calibration_path}")
-
-    force_kris = set(force_kris or [])
-    available_kris = [k for k in KRI_ORDER if k in df.columns]
-    if not available_kris:
-        raise ValueError(
-            f"No KRI columns found in {calibration_path}. "
-            f"Expected some of: {KRI_ORDER}"
-        )
-
-    original_calibration = CONFIG.get("calibration", {}).get("coefficients", {})
-    CONFIG.setdefault("calibration", {})["coefficients"] = {
-        kri: {"a": 1.0, "b": 0.0} for kri in KRI_ORDER
-    }
-    try:
-        auditor = KIBORA()
-        raw_by_kri = {kri: [] for kri in available_kris}
-        for txt in df[text_col].astype(str):
-            result = auditor.assess(txt)
-            for kri in available_kris:
-                raw_by_kri[kri].append(result.raw_scores[kri])
-    finally:
-        CONFIG["calibration"]["coefficients"] = original_calibration
-
-    report = {"fitted_on": str(path), "fitted_at": datetime.now().isoformat(), "kris": {}}
-    new_coeffs = dict(CONFIG.get("calibration", {}).get("coefficients", {}))
-
-    print(f"Fitting calibration on {len(df)} items from {calibration_path}\n")
-    print(f"{'KRI':<14}{'r':>8}{'a':>9}{'b':>9}{'MAE pre':>10}{'MAE post':>10}  status")
-    print("-" * 72)
-
-    for kri in available_kris:
-        raw = np.array(raw_by_kri[kri], dtype=float)
-        actual = df[kri].astype(float).to_numpy()
-
-        r = float(np.corrcoef(raw, actual)[0, 1]) if np.std(raw) > 1e-9 else 0.0
-
-        n = len(raw)
-        loo_r = []
-        for j in range(n):
-            mask = np.arange(n) != j
-            if np.std(raw[mask]) > 1e-9:
-                loo_r.append(np.corrcoef(raw[mask], actual[mask])[0, 1])
-        loo_min = float(min(loo_r)) if loo_r else 0.0
-        is_fragile = loo_min < min_correlation
-
-        a, b = np.polyfit(raw, actual, 1)
-        calibrated = np.clip(a * raw + b, 0.0, 1.0)
-
-        mae_pre = float(np.mean(np.abs(raw - actual)))
-        mae_post = float(np.mean(np.abs(calibrated - actual)))
-
-        will_apply = kri in force_kris or abs(r) >= min_correlation
-        if will_apply and is_fragile and kri not in force_kris:
-            will_apply = False
-            status = f"SKIPPED (fragile: r drops to {loo_min:.2f} without one item)"
-        elif will_apply and a <= 0 and kri not in force_kris:
-            will_apply = False
-            status = "SKIPPED (a<=0: fit would invert risk ordering)"
-        else:
-            status = "applied" if will_apply else f"SKIPPED (|r|<{min_correlation})"
-
-        if will_apply:
-            new_coeffs[kri] = {"a": float(a), "b": float(b)}
-
-        report["kris"][kri] = {
-            "correlation": r, "loo_min_correlation": loo_min, "a": float(a), "b": float(b),
-            "mae_pre": mae_pre, "mae_post": mae_post, "applied": will_apply
-        }
-        print(f"{kri:<14}{r:>8.3f}{a:>9.3f}{b:>9.3f}{mae_pre:>10.3f}{mae_post:>10.3f}  {status}")
-
-    print(
-        "\nNote: MAE pre/post are measured on this same calibration set — "
-        "they show the fit, not generalization. Evaluate on a separate held-out "
-        "set before reporting."
-    )
-
-    CONFIG["calibration"] = {
-        "methodology_note": (
-            "Coefficients below are a linear rescale (calibrated = a*raw + b) "
-            "fit by fit_calibration() in this file against the expert scores "
-            "in 'fitted_on'. Each KRI passed two checks before being included: "
-            "aggregate correlation >= min_correlation, AND leave-one-out "
-            "correlation (recomputed with each single calibration item removed "
-            "in turn) also >= min_correlation, so the fit isn't one item "
-            "carrying the whole result. KRIs failing either check are left at "
-            "identity (a=1, b=0) rather than force-fit. "
-            "VALIDITY CAVEAT: these numbers are only as good as 'fitted_on'. "
-            "If that file was also used to shape which cues/prototypes exist "
-            "in KRI_DEFINITIONS (check git history / conversation record), "
-            "this calibration and that development share data, and any "
-            "pass-rate or MAE figure computed by re-scoring 'fitted_on' is "
-            "in-sample, not a validation result. Report accuracy figures only "
-            "from a set that was never used for either cue design or this "
-            "calibration step."
-        ),
-        "fitted_on": report["fitted_on"],
-        "fitted_at": report["fitted_at"],
-        "coefficients": new_coeffs
-    }
-
-    out_path = Path(out_config_path) if out_config_path else CONFIG_FILE
-    with out_path.open("w", encoding="utf-8") as f:
-        json.dump(CONFIG, f, indent=2)
-    print(f"\nWrote calibration to {out_path}")
-
-    return report
-
-
 def main():
     parser = argparse.ArgumentParser(
-        description="KIBO-RA v2 non-calibrated Requirements Auditor"
+        description="KIBO-RA v2 Requirements Auditor"
     )
     parser.add_argument("--txt", default=None)
     parser.add_argument("--csv", default=None)
     parser.add_argument("--text-col", default="requirement")
     parser.add_argument("--out-prefix", default=None)
-    parser.add_argument(
-        "--fit-calibration", default=None, metavar="CALIBRATION_FILE",
-        help=(
-            "Fit the post-hoc calibration layer against a disclosed "
-            "calibration set (xlsx/csv with a text column and one column "
-            "per KRI of expert scores), instead of scoring. Writes "
-            "governance_config_v23.json and exits."
-        )
-    )
-    parser.add_argument("--calibration-text-col", default="text")
-    parser.add_argument(
-        "--min-correlation", type=float, default=0.40,
-        help="Skip calibrating a KRI whose fit |r| is below this (default 0.40)."
-    )
-    parser.add_argument(
-        "--force-calibrate-kris", nargs="*", default=[],
-        help="Calibrate these KRIs even if their fit correlation is weak."
-    )
     args = parser.parse_args()
-
-    if args.fit_calibration:
-        fit_calibration(
-            calibration_path=args.fit_calibration,
-            text_col=args.calibration_text_col,
-            min_correlation=args.min_correlation,
-            force_kris=args.force_calibrate_kris
-        )
-        return
 
     requirements = load_requirements(
         txt_path=args.txt,
@@ -1561,7 +1368,6 @@ def main():
     )
 
     print(f"Loaded {len(requirements)} requirements.")
-    print("KIBO-RA v2: non-calibrated scoring mode")
 
     t0 = time.time()
     auditor = KIBORA()
