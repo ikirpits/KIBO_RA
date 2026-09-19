@@ -219,40 +219,6 @@ def has_restricted_action_pattern(text: str) -> bool:
     return bool(_RESTRICTED_ACTION_PATTERN.search(text))
 
 
-_SECURITY_CONTROL_TERM = (
-    r'\b(?:authenticat\w*|authoriz\w*|encrypt\w*|credential\w*|'
-    r'access control\w*|verif(?:y|ies|ied|ication)\w*|password\w*|'
-    r'mfa|2fa|multi-factor(?:\s+authentication)?|single sign-on|sso|'
-    r'firewall\w*|vpn|tls|ssl|https|rate limit\w*|'
-    r'input (?:validation|sanitiz\w*)|sanitiz\w*|least privilege|'
-    r'audit (?:log|trail)\w*|intrusion detection|digital signature\w*|'
-    r'pki|content security policy|csp|secrets management|vault|iam|'
-    r'biometric\w*|captcha|session (?:timeout|management)|'
-    r'security (?:patch|control)\w*|penetration test\w*|hsm)\b'
-)
-
-_SECURITY_NEGATION_MARKER = (
-    r'\b(?:without|lack(?:s|ing)?(?:\s+of)?|no|absen[ct](?:\s+of)?|missing|'
-    r'excluding|exclude[sd]?|bypass\w*|disabl\w*|forgo\w*|omit\w*|skip\w*|'
-    r'never|not)\b'
-)
-
-_NEGATED_SECURITY_CONTROL_PATTERN = re.compile(
-    _SECURITY_NEGATION_MARKER +
-    r'(?:\s+\w+){0,5}?\s+' + _SECURITY_CONTROL_TERM +
-    r'|' + _SECURITY_CONTROL_TERM +
-    r'(?:\s+\w+){0,3}?\s+(?:is|are|was|were)\s+not\s+'
-    r'(?:required|needed|used|implemented|enforced|applied|performed|present|'
-    r'in place|enabled)\b'
-    r'|\b(?:unauthenticated|unencrypted|unprotected|unsecured)\b',
-    re.I
-)
-
-
-def has_negated_security_control(text: str) -> bool:
-    return bool(_NEGATED_SECURITY_CONTROL_PATTERN.search(text))
-
-
 _STATISTICAL_POPULATION_TARGET = re.compile(
     r'\d+(\.\d+)?\s*%\s*of\s+(registered\s+|active\s+)?'
     r'(users?|customers?|clients?|members?|subscribers?|visitors?|people|employees?)\b'
@@ -529,6 +495,56 @@ KRI_DEFINITIONS = {
 }
 
 KRI_ORDER = list(KRI_DEFINITIONS)
+
+
+_SECURITY_THREAT_AND_NONCONTROL_CUES = {
+    # threats/attacks/incidents: presence itself is the risk signal, so
+    # negating them reads as protective ("no malware found"), not as a
+    # control gap the way negating a control does
+    "breach", "injection", "sql injection", "cross-site scripting", "xss",
+    "csrf", "cross-site request forgery", "vulnerabilit*", "exploit*",
+    "attack surface", "malware", "phishing", "ransomware", "brute force",
+    "data leak*", "data breach", "cve", "security incident", "forensics",
+    "clickjacking", "man-in-the-middle", "replay attack", "session hijacking",
+    "privilege escalation", "denial of service", "dos attack", "ddos",
+    "unauthorized",
+    # data classifications: absence is data minimization, the opposite of
+    # a control gap
+    "sensitive data", "personal data",
+    # too generic standalone to anchor a negation reliably
+    "identity", "session",
+}
+
+_SECURITY_CONTROL_TERM = (
+    r'\b(?:' + '|'.join(
+        (re.escape(cue[:-1]) + r'\w*') if cue.endswith("*") else re.escape(cue)
+        for cue in KRI_DEFINITIONS["security"]["cues"]
+        if cue not in _SECURITY_THREAT_AND_NONCONTROL_CUES
+    ) + r')\b'
+)
+
+_SECURITY_NEGATION_MARKER = (
+    r'\b(?:without|lack(?:s|ing)?(?:\s+of)?|no|absen[ct](?:\s+of)?|missing|'
+    r'excluding|exclude[sd]?|bypass\w*|disabl\w*|forgo\w*|omit\w*|skip\w*|'
+    r'never|not)\b'
+)
+
+_NEGATED_SECURITY_CONTROL_PATTERN = re.compile(
+    _SECURITY_NEGATION_MARKER +
+    r'(?:\s+[\w-]+){0,5}?\s+' + _SECURITY_CONTROL_TERM +
+    r'|' + _SECURITY_CONTROL_TERM +
+    r'(?:\s+[\w-]+){0,3}?\s+(?:is|are|was|were)\s+not\s+'
+    r'(?:required|needed|used|implemented|enforced|applied|performed|present|'
+    r'in place|enabled|verified|validated|checked|authenticated|authorized|'
+    r'encrypted|secured|protected|sanitized|logged|monitored|audited|signed|'
+    r'hashed|salted|revoked|rotated|patched)\b'
+    r'|\b(?:unauthenticated|unencrypted|unprotected|unsecured)\b',
+    re.I
+)
+
+
+def has_negated_security_control(text: str) -> bool:
+    return bool(_NEGATED_SECURITY_CONTROL_PATTERN.search(text))
 
 
 KRI_COBIT_MAPPING = {
