@@ -6,7 +6,7 @@ image = modal.Image.from_dockerfile("Dockerfile").workdir("/app")
 
 @app.function(image=image, memory=4096, timeout=600, min_containers=0)
 @modal.asgi_app()
-def ui():
+def web():
     import gradio as gr
     from fastapi import FastAPI
     from ui import demo
