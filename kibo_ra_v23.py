@@ -317,6 +317,9 @@ KRI_DEFINITIONS = {
             "role*", "privilege", "encrypt*",
             "confidential", "integrity", "privacy", "personal data",
             "sensitive data", "token", "session", "mfa", "2fa",
+            "otp*", "totp*", "hotp*", "one-time pin*", "one-time code*",
+            "passcode*", "passphrase*", "verification code*",
+            "recovery code*", "backup code*",
             "biometric", "unauthorized", "breach", "protect*",
             "injection", "sql injection", "cross-site scripting", "xss",
             "csrf", "cross-site request forgery", "vulnerabilit*",
@@ -1090,6 +1093,7 @@ class KIBORA:
             credential_mechanism_named = co_occurs_with(
                 text, "authenticat*",
                 ["password", "token", "biometric", "mfa", "2fa",
+                 "otp*", "passcode*", "passphrase*",
                  "certificate", "credential"]
             )
 
@@ -1162,6 +1166,7 @@ class KIBORA:
                 co_occurs_with(
                     text, "authenticat*",
                     ["password", "token", "biometric", "mfa", "2fa",
+                     "otp*", "passcode*", "passphrase*",
                      "certificate", "credential", "username"]
                 )
                 or co_occurs_with(text, "log in", ["secur*", "safe*"])
