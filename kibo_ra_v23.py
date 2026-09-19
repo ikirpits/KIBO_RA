@@ -220,18 +220,31 @@ def has_restricted_action_pattern(text: str) -> bool:
 
 
 _SECURITY_CONTROL_TERM = (
-    r'(?:authenticat\w*|authoriz\w*|encrypt\w*|credential\w*|'
-    r'access control\w*|verification|password\w*|\bmfa\b|\b2fa\b|'
-    r'multi-factor(?:\s+authentication)?|single sign-on|\bsso\b)'
+    r'\b(?:authenticat\w*|authoriz\w*|encrypt\w*|credential\w*|'
+    r'access control\w*|verif(?:y|ies|ied|ication)\w*|password\w*|'
+    r'mfa|2fa|multi-factor(?:\s+authentication)?|single sign-on|sso|'
+    r'firewall\w*|vpn|tls|ssl|https|rate limit\w*|'
+    r'input (?:validation|sanitiz\w*)|sanitiz\w*|least privilege|'
+    r'audit (?:log|trail)\w*|intrusion detection|digital signature\w*|'
+    r'pki|content security policy|csp|secrets management|vault|iam|'
+    r'biometric\w*|captcha|session (?:timeout|management)|'
+    r'security (?:patch|control)\w*|penetration test\w*|hsm)\b'
+)
+
+_SECURITY_NEGATION_MARKER = (
+    r'\b(?:without|lack(?:s|ing)?(?:\s+of)?|no|absen[ct](?:\s+of)?|missing|'
+    r'excluding|exclude[sd]?|bypass\w*|disabl\w*|forgo\w*|omit\w*|skip\w*|'
+    r'never|not)\b'
 )
 
 _NEGATED_SECURITY_CONTROL_PATTERN = re.compile(
-    r'\b(without|lack(?:s|ing)?\s+of|no|absen[ct](?:\s+of)?|missing)\b'
-    r'(?:\s+\w+){0,3}?\s+' + _SECURITY_CONTROL_TERM +
+    _SECURITY_NEGATION_MARKER +
+    r'(?:\s+\w+){0,5}?\s+' + _SECURITY_CONTROL_TERM +
     r'|' + _SECURITY_CONTROL_TERM +
     r'(?:\s+\w+){0,3}?\s+(?:is|are|was|were)\s+not\s+'
-    r'(?:required|needed|used|implemented|enforced|applied|performed|present|in place)\b'
-    r'|\b(unauthenticated|unencrypted)\b',
+    r'(?:required|needed|used|implemented|enforced|applied|performed|present|'
+    r'in place|enabled)\b'
+    r'|\b(?:unauthenticated|unencrypted|unprotected|unsecured)\b',
     re.I
 )
 
