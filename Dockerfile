@@ -5,7 +5,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY kibo_ra_v23.py governance_config_v23.json app.py ./
+COPY kibo_ra_v23.py governance_config_v23.json requirements_input.txt app.py ./
 
 ENV HF_HOME=/app/.cache/huggingface
 RUN mkdir -p /app/.cache/huggingface && chmod -R 777 /app/.cache
