@@ -219,6 +219,27 @@ def has_restricted_action_pattern(text: str) -> bool:
     return bool(_RESTRICTED_ACTION_PATTERN.search(text))
 
 
+_SECURITY_CONTROL_TERM = (
+    r'(?:authenticat\w*|authoriz\w*|encrypt\w*|credential\w*|'
+    r'access control\w*|verification|password\w*|\bmfa\b|\b2fa\b|'
+    r'multi-factor(?:\s+authentication)?|single sign-on|\bsso\b)'
+)
+
+_NEGATED_SECURITY_CONTROL_PATTERN = re.compile(
+    r'\b(without|lack(?:s|ing)?\s+of|no|absen[ct](?:\s+of)?|missing)\b'
+    r'(?:\s+\w+){0,3}?\s+' + _SECURITY_CONTROL_TERM +
+    r'|' + _SECURITY_CONTROL_TERM +
+    r'(?:\s+\w+){0,3}?\s+(?:is|are|was|were)\s+not\s+'
+    r'(?:required|needed|used|implemented|enforced|applied|performed|present|in place)\b'
+    r'|\b(unauthenticated|unencrypted)\b',
+    re.I
+)
+
+
+def has_negated_security_control(text: str) -> bool:
+    return bool(_NEGATED_SECURITY_CONTROL_PATTERN.search(text))
+
+
 _STATISTICAL_POPULATION_TARGET = re.compile(
     r'\d+(\.\d+)?\s*%\s*of\s+(registered\s+|active\s+)?'
     r'(users?|customers?|clients?|members?|subscribers?|visitors?|people|employees?)\b'
@@ -1033,6 +1054,10 @@ class KIBORA:
             if role_restriction_pattern:
                 hit_count += 1
 
+            negated_security_control = has_negated_security_control(text)
+            if negated_security_control:
+                hit_count += 1
+
             credential_mechanism_named = co_occurs_with(
                 text, "authenticat*",
                 ["password", "token", "biometric", "mfa", "2fa",
@@ -1093,7 +1118,8 @@ class KIBORA:
                 0.55 * availability_commitment +
                 0.20 * (1.0 if network_facing_exposure else 0.0) +
                 0.25 * (1.0 if account_provisioning_context else 0.0) +
-                0.25 * (1.0 if credential_recovery_context else 0.0) -
+                0.25 * (1.0 if credential_recovery_context else 0.0) +
+                0.55 * (1.0 if negated_security_control else 0.0) -
                 0.30 * (1.0 if pure_usability_content else 0.0)
             )
 
@@ -1180,6 +1206,7 @@ class KIBORA:
             evidence["generic_scope_verb_hits"] = generic_verb_hits
         if kri == "security":
             evidence["pure_usability_dampener_applied"] = pure_usability_content
+            evidence["negated_security_control"] = negated_security_control
         return float(lexical), evidence
 
     def assess(self, requirement: str) -> RiskResult:
