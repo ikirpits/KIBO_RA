@@ -44,6 +44,13 @@ def run(text_input, file_input):
 with gr.Blocks(title="KIBO-RA") as demo:
     gr.Markdown("# KIBO-RA")
     gr.Markdown("Score requirements on performance, security, compliance, complexity, and ambiguity.")
+    gr.Markdown(
+        "Each score is *exposure* -- how much governance-relevant language the text "
+        "contains -- not a verdict on the system itself. A high security score flags "
+        "text worth a reviewer's attention (including a stated absence of a control); "
+        "it isn't a claim that the system is insecure, and a low score isn't a claim "
+        "that it's secure."
+    )
 
     with gr.Row():
         text_input = gr.Textbox(lines=6, label="Requirements (one per line)")
