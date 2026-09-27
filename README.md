@@ -10,8 +10,13 @@ pinned: false
 
 # KIBO-RA
 
-Requirements risk auditor. Scores requirement text on five KRIs (performance,
+Requirements exposure auditor. Scores requirement text on five KRIs (performance,
 security, compliance, complexity, ambiguity) from lexical + semantic evidence.
+Each score reflects how much governance-relevant language the requirement text
+expresses -- not a judgment on the underlying system's actual quality. A high
+security score, for example, means the text names a lot of control-relevant
+detail worth reviewing, not that the system is insecure; a low score doesn't
+mean it's secure.
 
 Interactive docs at `/docs`.
 
