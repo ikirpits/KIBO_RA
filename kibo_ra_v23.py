@@ -252,7 +252,7 @@ def distinct_complexity_domains(
 
 KRI_DEFINITIONS = {
     "performance": {
-        "name": "Performance & Capacity Risk",
+        "name": "Performance Exposure",
         "cues": [
             "fast*", "slow*", "latency", "response time", "response*",
             "throughput", "load*", "performance", "scalab*",
@@ -354,7 +354,7 @@ KRI_DEFINITIONS = {
         ]
     },
     "compliance": {
-        "name": "Compliance & Regulatory Risk",
+        "name": "Compliance Exposure",
         "cues": [
             "compliance", "comply*", "regulation", "regulatory", "legal", "law",
             "policy", "standard*", "contract", "contractual", "audit",
@@ -398,7 +398,7 @@ KRI_DEFINITIONS = {
         ]
     },
     "complexity": {
-        "name": "Requirement Complexity Risk",
+        "name": "Complexity Exposure",
         "cues": [
             "multiple", "several", "next",
             "depends", "requires", "workflow",
@@ -458,7 +458,7 @@ KRI_DEFINITIONS = {
         ]
     },
     "ambiguity": {
-        "name": "Requirement Ambiguity Risk",
+        "name": "Ambiguity Exposure",
         "cues": [
             "some", "many", "few", "several", "appropriate", "reasonable",
             "quickly", "easy", "simple", "user friendly", "sufficient",
@@ -552,7 +552,7 @@ def has_negated_security_control(text: str) -> bool:
 
 KRI_COBIT_MAPPING = {
     "performance": {
-        "name": "Performance & Capacity Risk",
+        "name": "Performance Exposure",
         "primary": ["BAI04_Capacity", "DSS01_Services"],
         "secondary": ["APO09_SLAs", "MEA01_Performance", "APO02_Architecture"],
         "justification": "Performance constraints are contractual and architectural commitments once requirements are approved."
@@ -564,19 +564,19 @@ KRI_COBIT_MAPPING = {
         "justification": "Security exposure must be identified at requirement level, not deferred to implementation controls."
     },
     "compliance": {
-        "name": "Compliance & Regulatory Risk",
+        "name": "Compliance Exposure",
         "primary": ["MEA03_Compliance"],
         "secondary": ["APO01_Strategy", "APO03_Risk", "DSS06_BPServices", "EDM03_Risk"],
         "justification": "Non-compliant requirements create governance violations before development begins."
     },
     "complexity": {
-        "name": "Requirement Complexity Risk",
+        "name": "Complexity Exposure",
         "primary": ["BAI02_Requirements", "BAI03_Solutions"],
         "secondary": ["APO02_Architecture", "APO05_Portfolio", "BAI01_Programmes"],
         "justification": "Excessive complexity propagates architectural debt, delivery risk, and coordination overhead across build activities."
     },
     "ambiguity": {
-        "name": "Requirement Ambiguity Risk",
+        "name": "Ambiguity Exposure",
         "primary": ["BAI02_Requirements"],
         "secondary": ["APO11_Quality", "APO01_Strategy", "MEA01_Performance", "MEA02_Controls"],
         "justification": "Ambiguous requirements violate requirement definition quality, impair traceability, and undermine control effectiveness before build starts."
