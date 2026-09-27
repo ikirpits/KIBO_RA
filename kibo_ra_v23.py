@@ -250,6 +250,12 @@ def distinct_complexity_domains(
     return count
 
 
+# Each KRI measures exposure -- how much governance-relevant language a
+# requirement's text contains -- not the real-world quality of the system it
+# describes. A high security score means the text names a lot of
+# control-relevant detail (including negated/absent controls) worth
+# reviewing; it is not a claim that the system is insecure, and a low score
+# is not a claim that it's secure.
 KRI_DEFINITIONS = {
     "performance": {
         "name": "Performance Exposure",
