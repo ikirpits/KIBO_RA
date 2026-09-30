@@ -495,7 +495,10 @@ KRI_DEFINITIONS = {
             "may vary", "where possible", "to the extent possible",
             "as far as possible", "except as noted", "unless otherwise",
             "tbc", "to be confirmed",
-            "normal", "high availability"
+            "normal", "high availability",
+            "professional", "understandable", "naturally understandable",
+            "timely", "up-to-date", "up to date", "prompt*", "responsive*",
+            "swiftly", "rapidly"
         ],
         "prototypes": [
             "the requirement contains vague subjective or underspecified language",
@@ -779,6 +782,20 @@ def has_quantified_performance_target(text: str) -> bool:
     )
 
 
+_UNQUANTIFIED_TEMPORAL_CUES = [
+    "acceptable time", "fast", "quickly", "timely manner",
+    "in a timely fashion", "timely", "up-to-date", "up to date",
+    "prompt*", "responsive*", "swiftly", "rapidly",
+]
+
+
+def has_unquantified_temporal_commitment(text: str) -> bool:
+    return (
+        any(phrase_present(text, cue) for cue in _UNQUANTIFIED_TEMPORAL_CUES)
+        and not has_quantified_performance_target(text)
+    )
+
+
 _NORMATIVE_OBLIGATION = re.compile(
     r"\b(shall|must|will|should|is required to|are required to|"
     r"needs? to|has to|have to)\b", re.I
@@ -821,7 +838,9 @@ def linguistic_features(text: str) -> Dict[str, float]:
     alternatives = len(re.findall(r"\b(or|either|alternatively|and/or)\b", text.lower()))
     vague = len(re.findall(
         r"\b(appropriate|reasonable|quickly|easy|simple|many|few|several|"
-        r"sufficient|adequate|soon|relevant|properly|usually|normally)\b",
+        r"sufficient|adequate|soon|relevant|properly|usually|normally|"
+        r"acceptable|fast|professional|understandable|timely|prompt\w*|"
+        r"responsive\w*)\b",
         text.lower()
     ))
     pronouns = len(re.findall(r"\b(it|this|that|they|them|their|its)\b", text.lower()))
@@ -1076,6 +1095,7 @@ class KIBORA:
                 and hit_count == 0
                 and generic_verb_hits == 0
             )
+            unquantified_temporal_commitment = has_unquantified_temporal_commitment(text)
             structural = (
                 0.15 * (1.0 if has_normative_obligation(text) else 0.0) +
                 0.20 * saturated(features["vague_terms"], 1.5) +
@@ -1084,7 +1104,8 @@ class KIBORA:
                 0.09 * saturated(features["modal_terms"], 2.0) +
                 0.35 * saturated(generic_verb_hits, 1.5) +
                 0.25 * (1.0 if unverifiable_capacity_claim else 0.0) +
-                0.25 * (1.0 if bare_infrastructure_reference else 0.0) -
+                0.25 * (1.0 if bare_infrastructure_reference else 0.0) +
+                0.45 * (1.0 if unquantified_temporal_commitment else 0.0) -
                 0.20 * (1.0 if self_anchored_consistency else 0.0)
             )
 
@@ -1263,6 +1284,7 @@ class KIBORA:
             evidence["distinct_complexity_domains"] = distinct_domains
         if kri == "ambiguity":
             evidence["generic_scope_verb_hits"] = generic_verb_hits
+            evidence["unquantified_temporal_commitment"] = unquantified_temporal_commitment
         if kri == "security":
             evidence["pure_usability_dampener_applied"] = pure_usability_content
             evidence["negated_security_control"] = negated_security_control
