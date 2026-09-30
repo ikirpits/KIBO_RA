@@ -796,6 +796,19 @@ def has_unquantified_temporal_commitment(text: str) -> bool:
     )
 
 
+_UNQUANTIFIED_SUBJECTIVE_QUALITY_CUES = [
+    "professional", "understandable", "naturally understandable",
+    "easy", "simple", "user friendly", "user-friendly",
+]
+
+
+def has_unquantified_subjective_quality_claim(text: str) -> bool:
+    return (
+        any(phrase_present(text, cue) for cue in _UNQUANTIFIED_SUBJECTIVE_QUALITY_CUES)
+        and not re.search(r"\d", text)
+    )
+
+
 _NORMATIVE_OBLIGATION = re.compile(
     r"\b(shall|must|will|should|is required to|are required to|"
     r"needs? to|has to|have to)\b", re.I
@@ -839,7 +852,7 @@ def linguistic_features(text: str) -> Dict[str, float]:
     vague = len(re.findall(
         r"\b(appropriate|reasonable|quickly|easy|simple|many|few|several|"
         r"sufficient|adequate|soon|relevant|properly|usually|normally|"
-        r"acceptable|fast|professional|understandable|timely|prompt\w*|"
+        r"acceptable|fast|timely|prompt\w*|"
         r"responsive\w*)\b",
         text.lower()
     ))
@@ -1096,6 +1109,7 @@ class KIBORA:
                 and generic_verb_hits == 0
             )
             unquantified_temporal_commitment = has_unquantified_temporal_commitment(text)
+            unquantified_subjective_quality_claim = has_unquantified_subjective_quality_claim(text)
             structural = (
                 0.15 * (1.0 if has_normative_obligation(text) else 0.0) +
                 0.20 * saturated(features["vague_terms"], 1.5) +
@@ -1105,7 +1119,8 @@ class KIBORA:
                 0.35 * saturated(generic_verb_hits, 1.5) +
                 0.25 * (1.0 if unverifiable_capacity_claim else 0.0) +
                 0.25 * (1.0 if bare_infrastructure_reference else 0.0) +
-                0.45 * (1.0 if unquantified_temporal_commitment else 0.0) -
+                0.65 * (1.0 if unquantified_temporal_commitment else 0.0) +
+                0.55 * (1.0 if unquantified_subjective_quality_claim else 0.0) -
                 0.20 * (1.0 if self_anchored_consistency else 0.0)
             )
 
@@ -1285,6 +1300,7 @@ class KIBORA:
         if kri == "ambiguity":
             evidence["generic_scope_verb_hits"] = generic_verb_hits
             evidence["unquantified_temporal_commitment"] = unquantified_temporal_commitment
+            evidence["unquantified_subjective_quality_claim"] = unquantified_subjective_quality_claim
         if kri == "security":
             evidence["pure_usability_dampener_applied"] = pure_usability_content
             evidence["negated_security_control"] = negated_security_control
