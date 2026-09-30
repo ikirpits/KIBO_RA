@@ -89,7 +89,7 @@ COMPLEXITY_DOMAINS = {
         "vulnerabilit*", "threat model*"
     ],
     "distributed_scale": [
-        "distributed", "replicat*", "concurrent", "cluster",
+        "distributed", "replicat*", "concurrent", "simultaneous", "cluster",
         "load balanc*", "fault toleran*", "availab*", "scale", "scalab*",
         "capacity", "capable*",
         "sharding", "shard*", "partition*", "horizontal scal*",
@@ -412,7 +412,7 @@ KRI_DEFINITIONS = {
     "complexity": {
         "name": "Complexity Exposure",
         "cues": [
-            "multiple", "several", "next",
+            "multiple", "several", "both", "next",
             "depends", "requires", "workflow",
             "process", "step", "component", "service",
             "integration", "interface", "condition", "rule", "exception",
@@ -824,6 +824,28 @@ def has_quantified_capacity_claim(text: str) -> bool:
     )
 
 
+_VERSIONED_SYSTEM_REFERENCE = re.compile(r'\d+\.\d+')
+_CONJUNCTION_PATTERN = re.compile(r'\b(and|either|or)\b', re.I)
+
+
+def has_versioned_multi_system_reference(text: str) -> bool:
+    return (
+        len(_VERSIONED_SYSTEM_REFERENCE.findall(text)) >= 2
+        and bool(_CONJUNCTION_PATTERN.search(text))
+    )
+
+
+_FAILURE_RECOVERY_CUES = [
+    "in the event of a failure", "restored", "comes back online",
+    "offline mode", "connection is unavailable", "recover*", "backup",
+    "graceful degradation", "fail over", "failover",
+]
+
+
+def has_failure_recovery_context(text: str) -> bool:
+    return any(phrase_present(text, cue) for cue in _FAILURE_RECOVERY_CUES)
+
+
 _NORMATIVE_OBLIGATION = re.compile(
     r"\b(shall|must|will|should|is required to|are required to|"
     r"needs? to|has to|have to)\b", re.I
@@ -1092,6 +1114,8 @@ class KIBORA:
                 or phrase_present(text, "login")
                 or phrase_present(text, "sign in")
             )
+            versioned_multi_system_reference = has_versioned_multi_system_reference(text)
+            failure_recovery_context = has_failure_recovery_context(text)
             structural = (
                 0.25 * (1.0 if has_normative_obligation(text) else 0.0) +
                 0.18 * saturated(features["clauses"], 1.0) +
@@ -1100,7 +1124,9 @@ class KIBORA:
                 0.10 * features["length_ratio"] +
                 0.15 * saturated(distinct_domains, 1.0) +
                 0.15 * saturated(features["numeric_constraints"], 0.75) +
-                0.30 * (1.0 if identity_lifecycle_context else 0.0)
+                0.30 * (1.0 if identity_lifecycle_context else 0.0) +
+                0.45 * (1.0 if versioned_multi_system_reference else 0.0) +
+                0.95 * (1.0 if failure_recovery_context else 0.0)
             )
 
         elif kri == "ambiguity":
@@ -1316,6 +1342,8 @@ class KIBORA:
         }
         if kri == "complexity":
             evidence["distinct_complexity_domains"] = distinct_domains
+            evidence["versioned_multi_system_reference"] = versioned_multi_system_reference
+            evidence["failure_recovery_context"] = failure_recovery_context
         if kri == "ambiguity":
             evidence["generic_scope_verb_hits"] = generic_verb_hits
             evidence["unquantified_temporal_commitment"] = unquantified_temporal_commitment
