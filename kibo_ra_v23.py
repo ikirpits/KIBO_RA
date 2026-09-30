@@ -809,6 +809,21 @@ def has_unquantified_subjective_quality_claim(text: str) -> bool:
     )
 
 
+_PERFORMANCE_QUANTIFIED_CAPACITY_MODIFIED = re.compile(
+    r'\d+(\.\d+)?\s+\w+\s+(users?|customers?|requests?|transactions?|'
+    r'connections?|instances?|nodes?|accesses?|movies?)\b'
+    r'|\d+\s+(times|accesses|attempts|requests)\b',
+    re.I
+)
+
+
+def has_quantified_capacity_claim(text: str) -> bool:
+    return (
+        bool(_PERFORMANCE_QUANTIFIED_CAPACITY_MODIFIED.search(text))
+        and not has_quantified_performance_target(text)
+    )
+
+
 _NORMATIVE_OBLIGATION = re.compile(
     r"\b(shall|must|will|should|is required to|are required to|"
     r"needs? to|has to|have to)\b", re.I
@@ -1009,11 +1024,15 @@ class KIBORA:
                 phrase_present(text, qualifier)
                 for qualifier in _PERFORMANCE_LOAD_HANDLING_QUALIFIERS
             )
+            unquantified_temporal_commitment_perf = has_unquantified_temporal_commitment(text)
+            quantified_capacity_claim = has_quantified_capacity_claim(text)
             structural = (
                 0.55 * (1.0 if has_quantified_performance_target(text) else 0.0) +
                 0.20 * (1.0 if concurrent_user_context else 0.0) +
                 0.20 * (1.0 if scalability_mechanism_context else 0.0) +
-                0.25 * features["length_ratio"]
+                0.25 * features["length_ratio"] +
+                0.75 * (1.0 if unquantified_temporal_commitment_perf else 0.0) +
+                0.55 * (1.0 if quantified_capacity_claim else 0.0)
             )
             if has_statistical_population_target(text):
                 hit_count += 1
@@ -1306,6 +1325,9 @@ class KIBORA:
             evidence["negated_security_control"] = negated_security_control
         if kri == "compliance":
             evidence["generic_ui_presentation_dampener_applied"] = generic_ui_presentation_content
+        if kri == "performance":
+            evidence["unquantified_temporal_commitment"] = unquantified_temporal_commitment_perf
+            evidence["quantified_capacity_claim"] = quantified_capacity_claim
         return float(lexical), evidence
 
     def assess(self, requirement: str) -> RiskResult:
