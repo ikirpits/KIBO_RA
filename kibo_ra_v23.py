@@ -1119,8 +1119,8 @@ class KIBORA:
                 0.35 * saturated(generic_verb_hits, 1.5) +
                 0.25 * (1.0 if unverifiable_capacity_claim else 0.0) +
                 0.25 * (1.0 if bare_infrastructure_reference else 0.0) +
-                0.65 * (1.0 if unquantified_temporal_commitment else 0.0) +
-                0.55 * (1.0 if unquantified_subjective_quality_claim else 0.0) -
+                0.90 * (1.0 if unquantified_temporal_commitment else 0.0) +
+                0.85 * (1.0 if unquantified_subjective_quality_claim else 0.0) -
                 0.20 * (1.0 if self_anchored_consistency else 0.0)
             )
 
