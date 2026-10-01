@@ -415,7 +415,7 @@ KRI_DEFINITIONS = {
             "multiple", "several", "both", "next",
             "depends", "requires", "workflow",
             "process", "step", "component", "service",
-            "integration", "interface", "condition", "rule", "exception",
+            "integration", "condition", "rule", "exception",
             "configuration",
             "orchestrat*", "choreograph*", "state machine", "workflow engine",
             "business process", "approval chain", "escalation",
@@ -846,6 +846,10 @@ def has_failure_recovery_context(text: str) -> bool:
     return any(phrase_present(text, cue) for cue in _FAILURE_RECOVERY_CUES)
 
 
+def has_system_interface_reference(text: str) -> bool:
+    return phrase_present(text, "interface") and not phrase_present(text, "user interface")
+
+
 _NORMATIVE_OBLIGATION = re.compile(
     r"\b(shall|must|will|should|is required to|are required to|"
     r"needs? to|has to|have to)\b", re.I
@@ -1099,6 +1103,7 @@ class KIBORA:
                 exclude_solo={
                     "security": {"authenticat*", "authoriz*"},
                     "deployment": {"release"},
+                    "data_aggregation": {"report*"},
                 },
                 extra_signals={"access_control": has_restricted_action_pattern},
             )
@@ -1116,6 +1121,7 @@ class KIBORA:
             )
             versioned_multi_system_reference = has_versioned_multi_system_reference(text)
             failure_recovery_context = has_failure_recovery_context(text)
+            system_interface_reference = has_system_interface_reference(text)
             structural = (
                 0.25 * (1.0 if has_normative_obligation(text) else 0.0) +
                 0.18 * saturated(features["clauses"], 1.0) +
@@ -1126,7 +1132,8 @@ class KIBORA:
                 0.15 * saturated(features["numeric_constraints"], 0.75) +
                 0.30 * (1.0 if identity_lifecycle_context else 0.0) +
                 0.45 * (1.0 if versioned_multi_system_reference else 0.0) +
-                0.95 * (1.0 if failure_recovery_context else 0.0)
+                0.95 * (1.0 if failure_recovery_context else 0.0) +
+                0.30 * (1.0 if system_interface_reference else 0.0)
             )
 
         elif kri == "ambiguity":
@@ -1155,6 +1162,7 @@ class KIBORA:
             )
             unquantified_temporal_commitment = has_unquantified_temporal_commitment(text)
             unquantified_subjective_quality_claim = has_unquantified_subjective_quality_claim(text)
+            named_system_alternatives = has_versioned_multi_system_reference(text)
             structural = (
                 0.15 * (1.0 if has_normative_obligation(text) else 0.0) +
                 0.20 * saturated(features["vague_terms"], 1.5) +
@@ -1166,7 +1174,8 @@ class KIBORA:
                 0.25 * (1.0 if bare_infrastructure_reference else 0.0) +
                 0.90 * (1.0 if unquantified_temporal_commitment else 0.0) +
                 0.85 * (1.0 if unquantified_subjective_quality_claim else 0.0) -
-                0.20 * (1.0 if self_anchored_consistency else 0.0)
+                0.20 * (1.0 if self_anchored_consistency else 0.0) -
+                0.30 * (1.0 if named_system_alternatives else 0.0)
             )
 
         elif kri == "security":
@@ -1344,10 +1353,12 @@ class KIBORA:
             evidence["distinct_complexity_domains"] = distinct_domains
             evidence["versioned_multi_system_reference"] = versioned_multi_system_reference
             evidence["failure_recovery_context"] = failure_recovery_context
+            evidence["system_interface_reference"] = system_interface_reference
         if kri == "ambiguity":
             evidence["generic_scope_verb_hits"] = generic_verb_hits
             evidence["unquantified_temporal_commitment"] = unquantified_temporal_commitment
             evidence["unquantified_subjective_quality_claim"] = unquantified_subjective_quality_claim
+            evidence["named_system_alternatives"] = named_system_alternatives
         if kri == "security":
             evidence["pure_usability_dampener_applied"] = pure_usability_content
             evidence["negated_security_control"] = negated_security_control
