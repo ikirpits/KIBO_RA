@@ -1179,14 +1179,18 @@ class KIBORA:
             )
 
         elif kri == "security":
-            access_control_context = co_occurs_with(
-                text, "access",
-                ["control", "restrict*", "grant*", "authoriz*",
-                 "permission*", "right*", "unauthorized", "allow*"]
-            )
             role_restriction_pattern = has_restricted_action_pattern(text)
             if role_restriction_pattern:
                 hit_count += 1
+
+            access_control_context = (
+                co_occurs_with(
+                    text, "access",
+                    ["control", "restrict*", "grant*", "authoriz*",
+                     "permission*", "right*", "unauthorized", "allow*"]
+                )
+                or (role_restriction_pattern and phrase_present(text, "access"))
+            )
 
             negated_security_control = has_negated_security_control(text)
             if negated_security_control:
