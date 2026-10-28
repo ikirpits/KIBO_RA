@@ -759,14 +759,15 @@ def co_occurs_with(text: str, base: str, qualifiers: List[str]) -> bool:
 
 
 _PERFORMANCE_QUANTIFIED_TARGET = re.compile(
-    r'\d+(\.\d+)?\s*(second|sec|ms|millisecond|minute|hour|day|week|month|'
-    r'user|customer|request|movie|concurrent|'
+    r'\d+(\.\d+)?\s*(second|sec|ms|millisecond|minute|hour|day|week|month|year|'
+    r'user|customer|request|movie|concurrent|student|'
     r'transaction|quer(y|ies)|operation|connection|node|instance|'
     r'gb|mb|tb|kb|byte)', re.I
 )
 
 _PERFORMANCE_UPTIME_TARGET = re.compile(
-    r'\d+(\.\d+)?\s*%\s*of\s+the\s+time', re.I
+    r'\d+(\.\d+)?\s*%\s*of\s+the\s+time'
+    r'|\d+(\.\d+)?\s*%\s*up[\s-]*time', re.I
 )
 
 _PERFORMANCE_CLOCK_TIME = re.compile(
@@ -803,8 +804,11 @@ _UNQUANTIFIED_SUBJECTIVE_QUALITY_CUES = [
 
 
 def has_unquantified_subjective_quality_claim(text: str) -> bool:
+    cues = _UNQUANTIFIED_SUBJECTIVE_QUALITY_CUES
+    if phrase_present(text, "professional") and phrase_present(text, "operating system"):
+        cues = [c for c in cues if c != "professional"]
     return (
-        any(phrase_present(text, cue) for cue in _UNQUANTIFIED_SUBJECTIVE_QUALITY_CUES)
+        any(phrase_present(text, cue) for cue in cues)
         and not re.search(r"\d", text)
     )
 
