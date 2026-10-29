@@ -821,6 +821,17 @@ def has_quantified_capacity_claim(text: str) -> bool:
     )
 
 
+_UNQUANTIFIED_UNIVERSAL_SCOPE = re.compile(r'\ball\s+of\s+the\s+\w+', re.I)
+
+
+def has_unquantified_universal_scope_claim(text: str) -> bool:
+    return (
+        bool(_UNQUANTIFIED_UNIVERSAL_SCOPE.search(text))
+        and not has_quantified_performance_target(text)
+        and not has_quantified_capacity_claim(text)
+    )
+
+
 _VERSIONED_SYSTEM_REFERENCE = re.compile(r'\d+\.\d+')
 _CONJUNCTION_PATTERN = re.compile(r'\b(and|either|or)\b', re.I)
 
@@ -1049,13 +1060,15 @@ class KIBORA:
             )
             unquantified_temporal_commitment_perf = has_unquantified_temporal_commitment(text)
             quantified_capacity_claim = has_quantified_capacity_claim(text)
+            unquantified_universal_scope_claim = has_unquantified_universal_scope_claim(text)
             structural = (
                 0.55 * (1.0 if has_quantified_performance_target(text) else 0.0) +
                 0.20 * (1.0 if concurrent_user_context else 0.0) +
                 0.20 * (1.0 if scalability_mechanism_context else 0.0) +
                 0.25 * features["length_ratio"] +
                 0.75 * (1.0 if unquantified_temporal_commitment_perf else 0.0) +
-                0.55 * (1.0 if quantified_capacity_claim else 0.0)
+                0.55 * (1.0 if quantified_capacity_claim else 0.0) +
+                0.40 * (1.0 if unquantified_universal_scope_claim else 0.0)
             )
             if has_statistical_population_target(text):
                 hit_count += 1
@@ -1160,6 +1173,7 @@ class KIBORA:
             unquantified_temporal_commitment = has_unquantified_temporal_commitment(text)
             unquantified_subjective_quality_claim = has_unquantified_subjective_quality_claim(text)
             named_system_alternatives = has_versioned_multi_system_reference(text)
+            unquantified_universal_scope_claim = has_unquantified_universal_scope_claim(text)
             structural = (
                 0.15 * (1.0 if has_normative_obligation(text) else 0.0) +
                 0.20 * saturated(features["vague_terms"], 1.5) +
@@ -1170,7 +1184,8 @@ class KIBORA:
                 0.25 * (1.0 if unverifiable_capacity_claim else 0.0) +
                 0.25 * (1.0 if bare_infrastructure_reference else 0.0) +
                 0.90 * (1.0 if unquantified_temporal_commitment else 0.0) +
-                0.85 * (1.0 if unquantified_subjective_quality_claim else 0.0) -
+                0.85 * (1.0 if unquantified_subjective_quality_claim else 0.0) +
+                0.40 * (1.0 if unquantified_universal_scope_claim else 0.0) -
                 0.20 * (1.0 if self_anchored_consistency else 0.0) -
                 0.30 * (1.0 if named_system_alternatives else 0.0)
             )
