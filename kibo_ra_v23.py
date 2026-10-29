@@ -1068,7 +1068,7 @@ class KIBORA:
                 0.25 * features["length_ratio"] +
                 0.75 * (1.0 if unquantified_temporal_commitment_perf else 0.0) +
                 0.55 * (1.0 if quantified_capacity_claim else 0.0) +
-                0.40 * (1.0 if unquantified_universal_scope_claim else 0.0)
+                0.34 * (1.0 if unquantified_universal_scope_claim else 0.0)
             )
             if has_statistical_population_target(text):
                 hit_count += 1
@@ -1185,7 +1185,7 @@ class KIBORA:
                 0.25 * (1.0 if bare_infrastructure_reference else 0.0) +
                 0.90 * (1.0 if unquantified_temporal_commitment else 0.0) +
                 0.85 * (1.0 if unquantified_subjective_quality_claim else 0.0) +
-                0.40 * (1.0 if unquantified_universal_scope_claim else 0.0) -
+                0.34 * (1.0 if unquantified_universal_scope_claim else 0.0) -
                 0.20 * (1.0 if self_anchored_consistency else 0.0) -
                 0.30 * (1.0 if named_system_alternatives else 0.0)
             )
