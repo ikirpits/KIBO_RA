@@ -206,13 +206,6 @@ _USABILITY_EXCLUSIVE_CUES = [
     "user friendly", "user-friendly", "aesthetic*"
 ]
 
-_COMPLIANCE_UI_PRESENTATION_CUES = [
-    "display", "table*", "graph", "chart*", "screen", "clock*",
-    "filter*", "region", "node*", "column*", "mdi", "color code*",
-    "refresh*", "viewing distance"
-]
-
-
 _RESTRICTED_ACTION_PATTERN = re.compile(
     r'\bonly\b.{0,40}?\b(can|may|shall|will|is allowed to|are allowed to|'
     r'is permitted to|are permitted to|has permission to|have permission to)\b'
@@ -1267,6 +1260,9 @@ class KIBORA:
             )
 
         elif kri == "compliance":
+            if phrase_present(text, "standard english") and "standard*" in hits:
+                hits = [h for h in hits if h != "standard*"]
+                hit_count -= 1
             distinct_domains = distinct_complexity_domains(text)
             verifiable_commitment = (
                 has_quantified_performance_target(text)
@@ -1306,17 +1302,15 @@ class KIBORA:
             network_facing_scope = any(
                 phrase_present(text, cue) for cue in _SECURITY_EXPOSURE_CUES
             )
-            generic_ui_presentation_content = (
+            no_compliance_signal_present = (
                 hit_count == 0
                 and not credential_control
                 and not approval_governance_workflow
                 and not stated_rationale
                 and not named_standard_conformance
-                and not healthcare_domain_context
                 and not remote_access_context
                 and not accessibility_relevant_presentation
                 and not network_facing_scope
-                and any(phrase_present(text, cue) for cue in _COMPLIANCE_UI_PRESENTATION_CUES)
             )
             structural = (
                 0.35 * (1.0 if has_normative_obligation(text) else 0.0) +
@@ -1331,7 +1325,7 @@ class KIBORA:
                 0.15 * (1.0 if remote_access_context else 0.0) +
                 0.25 * (1.0 if accessibility_relevant_presentation else 0.0) +
                 0.25 * (1.0 if network_facing_scope else 0.0) -
-                0.45 * (1.0 if generic_ui_presentation_content else 0.0)
+                0.34 * (1.0 if no_compliance_signal_present else 0.0)
             )
 
         else:
@@ -1371,7 +1365,7 @@ class KIBORA:
             evidence["pure_usability_dampener_applied"] = pure_usability_content
             evidence["negated_security_control"] = negated_security_control
         if kri == "compliance":
-            evidence["generic_ui_presentation_dampener_applied"] = generic_ui_presentation_content
+            evidence["no_compliance_signal_present"] = no_compliance_signal_present
         if kri == "performance":
             evidence["unquantified_temporal_commitment"] = unquantified_temporal_commitment_perf
             evidence["quantified_capacity_claim"] = quantified_capacity_claim
