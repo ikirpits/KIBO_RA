@@ -1311,6 +1311,7 @@ class KIBORA:
                 and not remote_access_context
                 and not accessibility_relevant_presentation
                 and not network_facing_scope
+                and not has_restricted_action_pattern(text)
             )
             structural = (
                 0.35 * (1.0 if has_normative_obligation(text) else 0.0) +
